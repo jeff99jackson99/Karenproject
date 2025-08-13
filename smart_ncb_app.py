@@ -68,13 +68,20 @@ def find_admin_columns(df, column_mapping):
         numeric_cols = []
         for col in df.columns:
             try:
-                if pd.api.types.is_numeric_dtype(df[col]) or df[col].dtype == 'object':
-                    # Try to convert to numeric
-                    numeric_values = pd.to_numeric(df[col], errors='coerce')
-                    if not numeric_values.isna().all():
-                        numeric_cols.append(col)
+                # Skip datetime columns
+                if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
+                    continue
+                    
+                # Try to convert to numeric
+                numeric_values = pd.to_numeric(df[col], errors='coerce')
+                if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
+                    # Only include columns that are actually numeric
+                    numeric_cols.append(col)
             except:
                 pass
+        
+        st.write(f"🔍 **Numeric columns found:** {len(numeric_cols)}")
+        st.write(f"  Sample columns: {numeric_cols[:10]}")
         
         # Assign admin columns by position (assuming they're in order)
         if len(numeric_cols) >= 4:
@@ -84,6 +91,12 @@ def find_admin_columns(df, column_mapping):
                 'Admin 9': numeric_cols[2] if len(numeric_cols) > 2 else None,
                 'Admin 10': numeric_cols[3] if len(numeric_cols) > 3 else None
             }
+            
+            st.write(f"✅ **Admin columns assigned by position:**")
+            for admin_type, col_name in admin_columns.items():
+                st.write(f"  {admin_type}: {col_name}")
+        else:
+            st.error(f"❌ Not enough numeric columns found. Need 4, found {len(numeric_cols)}")
     
     return admin_columns
 
@@ -172,6 +185,10 @@ def process_transaction_data(df, admin_columns):
         
         st.write(f"✅ **Transaction column found:** {transaction_col}")
         
+        # Show unique values in transaction column to understand the data
+        unique_transactions = df[transaction_col].astype(str).unique()
+        st.write(f"🔍 **Unique transaction values found:** {unique_transactions[:20]}")  # Show first 20
+        
         # Filter by transaction type and admin amounts
         nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
         c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
@@ -181,6 +198,25 @@ def process_transaction_data(df, admin_columns):
         st.write(f"  New Business: {nb_mask.sum()}")
         st.write(f"  Cancellations: {c_mask.sum()}")
         st.write(f"  Reinstatements: {r_mask.sum()}")
+        
+        # If no transactions found, try to understand the data better
+        if nb_mask.sum() == 0 and c_mask.sum() == 0 and r_mask.sum() == 0:
+            st.warning("⚠️ No standard transaction types found. Let me examine the data...")
+            
+            # Show sample values from the transaction column
+            sample_values = df[transaction_col].dropna().head(20).tolist()
+            st.write(f"🔍 **Sample transaction values:** {sample_values}")
+            
+            # Try to find any non-null values that might be transaction types
+            non_null_values = df[transaction_col].dropna().unique()
+            st.write(f"🔍 **All non-null transaction values:** {non_null_values[:20]}")
+            
+            # Look for patterns in the data
+            for col in df.columns[:10]:  # Check first 10 columns
+                if df[col].dtype == 'object':
+                    sample_vals = df[col].dropna().head(5).tolist()
+                    if any('NB' in str(v) or 'C' in str(v) or 'R' in str(v) for v in sample_vals):
+                        st.write(f"🔍 **Potential transaction column {col}:** {sample_vals}")
         
         # Filter NB data (sum > 0 and all 4 admin values present)
         nb_df = df[nb_mask].copy()
@@ -202,8 +238,8 @@ def process_transaction_data(df, admin_columns):
         
         return {
             'nb_data': nb_filtered,
-            'cancellation_data': cr_filtered[cr_df['Transaction Type'] == 'C'],
-            'reinstatement_data': cr_filtered[cr_df['Transaction Type'] == 'R'],
+            'cancellation_data': cr_filtered[cr_df[transaction_col] == 'C'],
+            'reinstatement_data': cr_filtered[cr_df[transaction_col] == 'R'],
             'admin_columns': admin_cols,
             'total_records': len(nb_filtered) + len(cr_filtered)
         }
