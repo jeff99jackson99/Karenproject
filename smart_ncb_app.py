@@ -35,7 +35,8 @@ def detect_column_structure(excel_file):
         return column_mapping
         
     except Exception as e:
-        st.error(f"❌ Error detecting column structure: {e}")
+        st.warning(f"⚠️ Could not read 'Col Ref' sheet: {e}")
+        st.write("🔄 **Trying alternative column detection methods...**")
         return {}
 
 def find_admin_columns(df, column_mapping):
@@ -127,11 +128,26 @@ def process_excel_data_smart(uploaded_file):
         column_mapping = detect_column_structure(uploaded_file)
         
         # Process the Data sheet (main transaction data)
-        if 'Data' in excel_data.sheet_names:
-            st.write("📋 **Processing Data Sheet**")
+        data_sheet_name = None
+        
+        # Look for common data sheet names
+        for sheet_name in excel_data.sheet_names:
+            if any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'detail', 'main']):
+                data_sheet_name = sheet_name
+                break
+        
+        # If no obvious data sheet found, try the first sheet that's not a summary
+        if not data_sheet_name:
+            for sheet_name in excel_data.sheet_names:
+                if not any(keyword in sheet_name.lower() for keyword in ['summary', 'xref', 'ref', 'instruction']):
+                    data_sheet_name = sheet_name
+                    break
+        
+        if data_sheet_name:
+            st.write(f"📋 **Processing {data_sheet_name} Sheet**")
             
-            # Read the Data sheet
-            df = pd.read_excel(uploaded_file, sheet_name='Data')
+            # Read the data sheet
+            df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
             st.write(f"📏 Data shape: {df.shape}")
             
             # Find admin columns
@@ -170,7 +186,7 @@ def process_excel_data_smart(uploaded_file):
                 st.error(f"❌ Need at least 4 Admin columns, found {len(admin_columns)}")
                 return None
         else:
-            st.error("❌ No 'Data' sheet found")
+            st.error("❌ No suitable data sheet found")
             return None
             
     except Exception as e:
