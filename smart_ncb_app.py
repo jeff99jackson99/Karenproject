@@ -63,56 +63,57 @@ def find_admin_columns(df, column_mapping):
     
     # If we don't have enough admin columns, try to find them by content analysis
     if len(admin_columns) < 4:
-        st.warning("⚠️ Could not identify all Admin columns from mapping, trying content-based detection...")
-        
-        # Look for columns that might contain Admin amounts by analyzing their content
-        potential_admin_cols = []
-        
-        for col in df.columns:
-            try:
-                # Skip datetime columns
-                if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
-                    continue
-                    
-                # Try to convert to numeric
-                numeric_values = pd.to_numeric(df[col], errors='coerce')
-                if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
-                    # Check if this column has meaningful non-zero values
-                    non_zero_count = (numeric_values > 0).sum()
-                    total_count = len(numeric_values)
-                    
-                    # Only consider columns with a reasonable number of non-zero values
-                    if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
-                        potential_admin_cols.append({
-                            'column': col,
-                            'non_zero_count': non_zero_count,
-                            'total_count': total_count,
-                            'non_zero_ratio': non_zero_count / total_count
-                        })
-            except:
-                pass
-        
-        # Sort by non-zero ratio to find the most likely Admin columns
-        potential_admin_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
-        
-        st.write(f"🔍 **Potential Admin columns found:** {len(potential_admin_cols)}")
-        for i, col_info in enumerate(potential_admin_cols[:10]):  # Show top 10
-            st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
-        
-        # Select the top 4 columns as Admin columns
-        if len(potential_admin_cols) >= 4:
-            admin_columns = {
-                'Admin 3': potential_admin_cols[0]['column'],
-                'Admin 4': potential_admin_cols[1]['column'], 
-                'Admin 9': potential_admin_cols[2]['column'],
-                'Admin 10': potential_admin_cols[3]['column']
-            }
+        with st.expander("⚠️ **Admin Column Detection Details** (Click to expand)", expanded=False):
+            st.warning("⚠️ Could not identify all Admin columns from mapping, trying content-based detection...")
             
-            st.write(f"✅ **Admin columns assigned by content analysis:**")
-            for admin_type, col_name in admin_columns.items():
-                st.write(f"  {admin_type}: {col_name}")
-        else:
-            st.error(f"❌ Not enough potential Admin columns found. Need 4, found {len(potential_admin_cols)}")
+            # Look for columns that might contain Admin amounts by analyzing their content
+            potential_admin_cols = []
+            
+            for col in df.columns:
+                try:
+                    # Skip datetime columns
+                    if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
+                        continue
+                        
+                    # Try to convert to numeric
+                    numeric_values = pd.to_numeric(df[col], errors='coerce')
+                    if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
+                        # Check if this column has meaningful non-zero values
+                        non_zero_count = (numeric_values > 0).sum()
+                        total_count = len(numeric_values)
+                        
+                        # Only consider columns with a reasonable number of non-zero values
+                        if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
+                            potential_admin_cols.append({
+                                'column': col,
+                                'non_zero_count': non_zero_count,
+                                'total_count': total_count,
+                                'non_zero_ratio': non_zero_count / total_count
+                            })
+                except:
+                    pass
+            
+            # Sort by non-zero ratio to find the most likely Admin columns
+            potential_admin_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
+            
+            st.write(f"🔍 **Potential Admin columns found:** {len(potential_admin_cols)}")
+            for i, col_info in enumerate(potential_admin_cols[:10]):  # Show top 10
+                st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
+            
+            # Select the top 4 columns as Admin columns
+            if len(potential_admin_cols) >= 4:
+                admin_columns = {
+                    'Admin 3': potential_admin_cols[0]['column'],
+                    'Admin 4': potential_admin_cols[1]['column'], 
+                    'Admin 9': potential_admin_cols[2]['column'],
+                    'Admin 10': potential_admin_cols[3]['column']
+                }
+                
+                st.write(f"✅ **Admin columns assigned by content analysis:**")
+                for admin_type, col_name in admin_columns.items():
+                    st.write(f"  {admin_type}: {col_name}")
+            else:
+                st.error(f"❌ Not enough potential Admin columns found. Need 4, found {len(potential_admin_cols)}")
     
     return admin_columns
 
@@ -121,74 +122,76 @@ def process_excel_data_smart(uploaded_file):
     try:
         excel_data = pd.ExcelFile(uploaded_file)
         
-        st.write("🔍 **Smart Processing Started**")
-        st.write(f"📊 Sheets found: {excel_data.sheet_names}")
-        
-        # Detect column structure
-        column_mapping = detect_column_structure(uploaded_file)
-        
-        # Process the Data sheet (main transaction data)
-        data_sheet_name = None
-        
-        # Look for common data sheet names
-        for sheet_name in excel_data.sheet_names:
-            if any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'detail', 'main']):
-                data_sheet_name = sheet_name
-                break
-        
-        # If no obvious data sheet found, try the first sheet that's not a summary
-        if not data_sheet_name:
+        # Create expandable section for processing details
+        with st.expander("🔍 **Processing Details** (Click to expand)", expanded=False):
+            st.write("🔍 **Smart Processing Started**")
+            st.write(f"📊 Sheets found: {excel_data.sheet_names}")
+            
+            # Detect column structure
+            column_mapping = detect_column_structure(uploaded_file)
+            
+            # Process the Data sheet (main transaction data)
+            data_sheet_name = None
+            
+            # Look for common data sheet names
             for sheet_name in excel_data.sheet_names:
-                if not any(keyword in sheet_name.lower() for keyword in ['summary', 'xref', 'ref', 'instruction']):
+                if any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'detail', 'main']):
                     data_sheet_name = sheet_name
                     break
-        
-        if data_sheet_name:
-            st.write(f"📋 **Processing {data_sheet_name} Sheet**")
             
-            # Read the data sheet
-            df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
-            st.write(f"📏 Data shape: {df.shape}")
+            # If no obvious data sheet found, try the first sheet that's not a summary
+            if not data_sheet_name:
+                for sheet_name in excel_data.sheet_names:
+                    if not any(keyword in sheet_name.lower() for keyword in ['summary', 'xref', 'ref', 'instruction']):
+                        data_sheet_name = sheet_name
+                        break
             
-            # Find admin columns
-            admin_columns = find_admin_columns(df, column_mapping)
-            st.write("🔍 **Admin Columns Found:**")
-            for admin_type, col_name in admin_columns.items():
-                st.write(f"  {admin_type}: {col_name}")
-            
-            if len(admin_columns) >= 4:
-                # Process the data
-                results = process_transaction_data(df, admin_columns)
+            if data_sheet_name:
+                st.write(f"📋 **Processing {data_sheet_name} Sheet**")
                 
-                if results:
-                    # Rename columns with meaningful names
-                    renamed_nb, nb_rename_map = rename_columns_with_meaning(results['nb_data'], column_mapping)
-                    renamed_cancellation, c_rename_map = rename_columns_with_meaning(results['cancellation_data'], column_mapping)
-                    renamed_reinstatement, r_rename_map = rename_columns_with_meaning(results['reinstatement_data'], column_mapping)
+                # Read the data sheet
+                df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
+                st.write(f"📏 Data shape: {df.shape}")
+                
+                # Find admin columns
+                admin_columns = find_admin_columns(df, column_mapping)
+                st.write("🔍 **Admin Columns Found:**")
+                for admin_type, col_name in admin_columns.items():
+                    st.write(f"  {admin_type}: {col_name}")
+                
+                if len(admin_columns) >= 4:
+                    # Process the data
+                    results = process_transaction_data(df, admin_columns)
                     
-                    # Show column renaming information
-                    st.write("🔍 **Column Renaming Applied:**")
-                    if nb_rename_map:
-                        st.write("  **New Business columns renamed:**")
-                        for old_name, new_name in nb_rename_map.items():
-                            st.write(f"    {old_name} → {new_name}")
-                    
-                    # Update results with renamed dataframes
-                    results['nb_data'] = renamed_nb
-                    results['cancellation_data'] = renamed_cancellation
-                    results['reinstatement_data'] = renamed_reinstatement
-                    results['column_mapping'] = column_mapping
-                    
-                    return results
+                    if results:
+                        # Rename columns with meaningful names
+                        renamed_nb, nb_rename_map = rename_columns_with_meaning(results['nb_data'], column_mapping)
+                        renamed_cancellation, c_rename_map = rename_columns_with_meaning(results['cancellation_data'], column_mapping)
+                        renamed_reinstatement, r_rename_map = rename_columns_with_meaning(results['reinstatement_data'], column_mapping)
+                        
+                        # Show column renaming information
+                        st.write("🔍 **Column Renaming Applied:**")
+                        if nb_rename_map:
+                            st.write("  **New Business columns renamed:**")
+                            for old_name, new_name in nb_rename_map.items():
+                                st.write(f"    {old_name} → {new_name}")
+                        
+                        # Update results with renamed dataframes
+                        results['nb_data'] = renamed_nb
+                        results['cancellation_data'] = renamed_cancellation
+                        results['reinstatement_data'] = renamed_reinstatement
+                        results['column_mapping'] = column_mapping
+                        
+                        return results
+                    else:
+                        return None
                 else:
+                    st.error(f"❌ Need at least 4 Admin columns, found {len(admin_columns)}")
                     return None
             else:
-                st.error(f"❌ Need at least 4 Admin columns, found {len(admin_columns)}")
+                st.error("❌ No suitable data sheet found")
                 return None
-        else:
-            st.error("❌ No suitable data sheet found")
-            return None
-            
+                
     except Exception as e:
         st.error(f"❌ Error in smart processing: {e}")
         import traceback
@@ -302,55 +305,56 @@ def process_transaction_data(df, admin_columns):
         st.write(f"  Admin Sum = 0: {(nb_df['Admin_Sum'] == 0).sum()} records")
         
         # More flexible filtering - try different approaches
-        st.write(f"🔍 **Trying different filtering approaches:**")
-        
-        # Approach 1: Sum > 0 (original requirement)
-        nb_filtered_1 = nb_df[nb_df['Admin_Sum'] > 0]
-        st.write(f"  Approach 1 (Sum > 0): {len(nb_filtered_1)} records")
-        
-        # Approach 2: At least 2 Admin amounts > 0
-        admin_gt_zero = (nb_df[admin_cols] > 0).sum(axis=1)
-        nb_filtered_2 = nb_df[admin_gt_zero >= 2]
-        st.write(f"  Approach 2 (≥2 Admin > 0): {len(nb_filtered_2)} records")
-        
-        # Approach 3: Any Admin amount > 0
-        nb_filtered_3 = nb_df[admin_gt_zero >= 1]
-        st.write(f"  Approach 3 (≥1 Admin > 0): {len(nb_filtered_3)} records")
-        
-        # Approach 4: EXACT USER REQUIREMENT - ALL 4 Admin amounts > 0 AND sum > 0
-        nb_filtered_4 = nb_df[
-            (nb_df['Admin_Sum'] > 0) &
-            (nb_df[admin_cols[0]] > 0) &
-            (nb_df[admin_cols[1]] > 0) &
-            (nb_df[admin_cols[2]] > 0) &
-            (nb_df[admin_cols[3]] > 0)
-        ]
-        st.write(f"  Approach 4 (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered_4)} records")
-        
-        # Use the EXACT user requirement (Approach 4)
-        nb_filtered = nb_filtered_4
-        st.write(f"✅ **Using EXACT user requirement (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered)} records**")
-        
-        # Show detailed breakdown of why records are filtered out
-        st.write(f"🔍 **Detailed filtering breakdown:**")
-        st.write(f"  Records with Admin Sum > 0: {len(nb_filtered_1)}")
-        st.write(f"  Records with ALL 4 Admin > 0: {len(nb_filtered_4)}")
-        st.write(f"  Records filtered out by Admin requirement: {len(nb_filtered_1) - len(nb_filtered_4)}")
-        
-        # Show sample of records that meet sum > 0 but not all 4 Admin > 0
-        if len(nb_filtered_1) > len(nb_filtered_4):
-            sample_filtered_out = nb_df[
-                (nb_df['Admin_Sum'] > 0) &
-                ~((nb_df[admin_cols[0]] > 0) &
-                  (nb_df[admin_cols[1]] > 0) &
-                  (nb_df[admin_cols[2]] > 0) &
-                  (nb_df[admin_cols[3]] > 0))
-            ].head(5)
+        with st.expander("🔍 **Filtering Details** (Click to expand)", expanded=False):
+            st.write(f"🔍 **Trying different filtering approaches:**")
             
-            st.write(f"🔍 **Sample records filtered out (Sum > 0 but not all 4 Admin > 0):**")
-            for i, col in enumerate(admin_cols):
-                st.write(f"  {col}: {sample_filtered_out[col].tolist()}")
-            st.write(f"  Admin Sum: {sample_filtered_out['Admin_Sum'].tolist()}")
+            # Approach 1: Sum > 0 (original requirement)
+            nb_filtered_1 = nb_df[nb_df['Admin_Sum'] > 0]
+            st.write(f"  Approach 1 (Sum > 0): {len(nb_filtered_1)} records")
+            
+            # Approach 2: At least 2 Admin amounts > 0
+            admin_gt_zero = (nb_df[admin_cols] > 0).sum(axis=1)
+            nb_filtered_2 = nb_df[admin_gt_zero >= 2]
+            st.write(f"  Approach 2 (≥2 Admin > 0): {len(nb_filtered_2)} records")
+            
+            # Approach 3: Any Admin amount > 0
+            nb_filtered_3 = nb_df[admin_gt_zero >= 1]
+            st.write(f"  Approach 3 (≥1 Admin > 0): {len(nb_filtered_3)} records")
+            
+            # Approach 4: EXACT USER REQUIREMENT - ALL 4 Admin amounts > 0 AND sum > 0
+            nb_filtered_4 = nb_df[
+                (nb_df['Admin_Sum'] > 0) &
+                (nb_df[admin_cols[0]] > 0) &
+                (nb_df[admin_cols[1]] > 0) &
+                (nb_df[admin_cols[2]] > 0) &
+                (nb_df[admin_cols[3]] > 0)
+            ]
+            st.write(f"  Approach 4 (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered_4)} records")
+            
+            # Use the EXACT user requirement (Approach 4)
+            nb_filtered = nb_filtered_4
+            st.write(f"✅ **Using EXACT user requirement (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered)} records**")
+            
+            # Show detailed breakdown of why records are filtered out
+            st.write(f"🔍 **Detailed filtering breakdown:**")
+            st.write(f"  Records with Admin Sum > 0: {len(nb_filtered_1)}")
+            st.write(f"  Records with ALL 4 Admin > 0: {len(nb_filtered_4)}")
+            st.write(f"  Records filtered out by Admin requirement: {len(nb_filtered_1) - len(nb_filtered_4)}")
+            
+            # Show sample of records that meet sum > 0 but not all 4 Admin > 0
+            if len(nb_filtered_1) > len(nb_filtered_4):
+                sample_filtered_out = nb_df[
+                    (nb_df['Admin_Sum'] > 0) &
+                    ~((nb_df[admin_cols[0]] > 0) &
+                      (nb_df[admin_cols[1]] > 0) &
+                      (nb_df[admin_cols[2]] > 0) &
+                      (nb_df[admin_cols[3]] > 0))
+                ].head(5)
+                
+                st.write(f"🔍 **Sample records filtered out (Sum > 0 but not all 4 Admin > 0):**")
+                for i, col in enumerate(admin_cols):
+                    st.write(f"  {col}: {sample_filtered_out[col].tolist()}")
+                st.write(f"  Admin Sum: {sample_filtered_out['Admin_Sum'].tolist()}")
         
         # Filter C/R data (sum != 0)
         cr_df = df[c_mask | r_mask].copy()
