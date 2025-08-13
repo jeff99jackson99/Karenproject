@@ -286,17 +286,20 @@ def process_transaction_data(df, admin_columns):
         
         # Filter dataframes to only include needed columns
         nb_filtered = nb_filtered[needed_columns]
-        cr_filtered = cr_df[cr_filtered.index][needed_columns]
+        
+        # For C/R data, first filter by transaction type, then select columns
+        cancellation_data = cr_df[cr_df[transaction_col] == 'C'][needed_columns]
+        reinstatement_data = cr_df[cr_df[transaction_col] == 'R'][needed_columns]
         
         st.write(f"🔍 **Selected columns for output:** {needed_columns}")
-        st.write(f"📊 **Output dataframe shapes:** NB: {nb_filtered.shape}, C/R: {cr_filtered.shape}")
+        st.write(f"📊 **Output dataframe shapes:** NB: {nb_filtered.shape}, C: {cancellation_data.shape}, R: {reinstatement_data.shape}")
         
         return {
             'nb_data': nb_filtered,
-            'cancellation_data': cr_filtered[cr_df.loc[cr_filtered.index, transaction_col] == 'C'],
-            'reinstatement_data': cr_filtered[cr_df.loc[cr_filtered.index, transaction_col] == 'R'],
+            'cancellation_data': cancellation_data,
+            'reinstatement_data': reinstatement_data,
             'admin_columns': admin_cols,
-            'total_records': len(nb_filtered) + len(cr_filtered)
+            'total_records': len(nb_filtered) + len(cancellation_data) + len(reinstatement_data)
         }
         
     except Exception as e:
