@@ -256,13 +256,46 @@ def process_transaction_data(df, admin_columns):
         
         # Filter NB data (sum > 0 and all 4 admin values present)
         nb_df = df[nb_mask].copy()
-        nb_filtered = nb_df[
-            (nb_df['Admin_Sum'] > 0) &
-            (nb_df[admin_cols[0]] != 0) &
-            (nb_df[admin_cols[1]] != 0) &
-            (nb_df[admin_cols[2]] != 0) &
-            (nb_df[admin_cols[3]] != 0)
-        ]
+        
+        # Show Admin amount statistics for NB data
+        st.write(f"🔍 **New Business Admin Amount Analysis:**")
+        for i, col in enumerate(admin_cols):
+            col_values = nb_df[col]
+            non_zero_count = (col_values > 0).sum()
+            zero_count = (col_values == 0).sum()
+            st.write(f"  {col}: {non_zero_count} non-zero, {zero_count} zero values")
+        
+        # Show sum statistics
+        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
+        st.write(f"  Admin Sum > 0: {(nb_df['Admin_Sum'] > 0).sum()} records")
+        st.write(f"  Admin Sum = 0: {(nb_df['Admin_Sum'] == 0).sum()} records")
+        
+        # More flexible filtering - try different approaches
+        st.write(f"🔍 **Trying different filtering approaches:**")
+        
+        # Approach 1: Sum > 0 (original requirement)
+        nb_filtered_1 = nb_df[nb_df['Admin_Sum'] > 0]
+        st.write(f"  Approach 1 (Sum > 0): {len(nb_filtered_1)} records")
+        
+        # Approach 2: At least 2 Admin amounts > 0
+        admin_gt_zero = (nb_df[admin_cols] > 0).sum(axis=1)
+        nb_filtered_2 = nb_df[admin_gt_zero >= 2]
+        st.write(f"  Approach 2 (≥2 Admin > 0): {len(nb_filtered_2)} records")
+        
+        # Approach 3: Any Admin amount > 0
+        nb_filtered_3 = nb_df[admin_gt_zero >= 1]
+        st.write(f"  Approach 3 (≥1 Admin > 0): {len(nb_filtered_3)} records")
+        
+        # Use the most appropriate filtering approach
+        if len(nb_filtered_1) > 0:
+            nb_filtered = nb_filtered_1
+            st.write(f"✅ **Using Approach 1 (Sum > 0): {len(nb_filtered)} records**")
+        elif len(nb_filtered_2) > 0:
+            nb_filtered = nb_filtered_2
+            st.write(f"✅ **Using Approach 2 (≥2 Admin > 0): {len(nb_filtered)} records**")
+        else:
+            nb_filtered = nb_filtered_3
+            st.write(f"✅ **Using Approach 3 (≥1 Admin > 0): {len(nb_filtered)} records**")
         
         # Filter C/R data (sum != 0)
         cr_df = df[c_mask | r_mask].copy()
