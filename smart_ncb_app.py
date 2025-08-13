@@ -174,10 +174,23 @@ def process_transaction_data(df, admin_columns):
         
         # Find transaction type column
         transaction_col = None
+        
+        # First, look for columns that actually contain transaction type data
         for col in df.columns:
-            if 'transaction' in str(col).lower() or 'type' in str(col).lower():
-                transaction_col = col
-                break
+            if df[col].dtype == 'object':
+                sample_vals = df[col].dropna().head(10).tolist()
+                # Check if this column contains transaction types (NB, C, R)
+                if any(str(v).upper() in ['NB', 'C', 'R', 'NEW BUSINESS', 'CANCELLATION', 'REINSTATEMENT'] for v in sample_vals):
+                    transaction_col = col
+                    st.write(f"✅ **Found transaction column by content:** {col} with values: {sample_vals[:5]}")
+                    break
+        
+        # If not found by content, fall back to name-based search
+        if not transaction_col:
+            for col in df.columns:
+                if 'transaction' in str(col).lower() or 'type' in str(col).lower():
+                    transaction_col = col
+                    break
         
         if not transaction_col:
             st.error("❌ No transaction type column found")
