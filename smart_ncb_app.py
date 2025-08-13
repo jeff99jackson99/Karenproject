@@ -300,13 +300,36 @@ def rename_columns_with_meaning(df, column_mapping):
     # Create a mapping from unnamed columns to meaningful names
     column_rename_map = {}
     
-    for col_idx, desc in column_mapping.items():
+    # Map Admin columns based on their position and the Col Ref sheet
+    admin_column_mapping = {
+        0: 'Admin_Base',      # Admin(Base)
+        4: 'Admin_CLP',       # Admin(CLP) 
+        7: 'Agent_NCB_Fees',  # Agent NCB Fees
+        16: 'Dealer_NCB_Fees' # Dealer NCB Fees
+    }
+    
+    # Apply Admin column renaming
+    for col_idx, new_name in admin_column_mapping.items():
         if col_idx < len(df.columns):
             col_name = df.columns[col_idx]
-            if 'Unnamed:' in str(col_name):
-                # Create a meaningful name from the description
-                clean_desc = str(desc).replace('(', '').replace(')', '').replace(' ', '_')
-                new_name = f"{clean_desc}"
+            column_rename_map[col_name] = new_name
+    
+    # Map other important columns based on the Col Ref sheet
+    other_column_mapping = {
+        1: 'Insurer_Code',
+        2: 'Product_Type_Code', 
+        3: 'Coverage_Code',
+        5: 'Dealer_Name',
+        6: 'Dealer_Insured_State',
+        8: 'Reinsurance_Support',
+        9: 'Transaction_Type'
+    }
+    
+    # Apply other column renaming
+    for col_idx, new_name in other_column_mapping.items():
+        if col_idx < len(df.columns):
+            col_name = df.columns[col_idx]
+            if col_name not in column_rename_map:  # Don't overwrite Admin columns
                 column_rename_map[col_name] = new_name
     
     # Also rename some common columns we know about
