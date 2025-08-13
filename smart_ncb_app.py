@@ -272,10 +272,29 @@ def process_transaction_data(df, admin_columns):
         st.write(f"  New Business (filtered): {len(nb_filtered)}")
         st.write(f"  Cancellations/Reinstatements (filtered): {len(cr_filtered)}")
         
+        # Select only the columns we need for output
+        needed_columns = [
+            admin_cols[0], admin_cols[1], admin_cols[2], admin_cols[3],  # Admin columns
+            transaction_col,  # Transaction type
+            'Admin_Sum'  # Calculated sum
+        ]
+        
+        # Add other important columns if they exist
+        for col in ['Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 8']:
+            if col in df.columns:
+                needed_columns.append(col)
+        
+        # Filter dataframes to only include needed columns
+        nb_filtered = nb_filtered[needed_columns]
+        cr_filtered = cr_df[cr_filtered.index][needed_columns]
+        
+        st.write(f"🔍 **Selected columns for output:** {needed_columns}")
+        st.write(f"📊 **Output dataframe shapes:** NB: {nb_filtered.shape}, C/R: {cr_filtered.shape}")
+        
         return {
             'nb_data': nb_filtered,
-            'cancellation_data': cr_filtered[cr_df[transaction_col] == 'C'],
-            'reinstatement_data': cr_filtered[cr_df[transaction_col] == 'R'],
+            'cancellation_data': cr_filtered[cr_df.loc[cr_filtered.index, transaction_col] == 'C'],
+            'reinstatement_data': cr_filtered[cr_df.loc[cr_filtered.index, transaction_col] == 'R'],
             'admin_columns': admin_cols,
             'total_records': len(nb_filtered) + len(cr_filtered)
         }
