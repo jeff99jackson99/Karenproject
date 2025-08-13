@@ -397,7 +397,8 @@ def main():
                     if len(results['nb_data']) > 0:
                         st.subheader("🆕 Sample New Business Data")
                         st.write("**Columns in this data:**")
-                        st.write(list(results['nb_data'].columns))
+                        # Force display of actual column names
+                        st.write([str(col) for col in results['nb_data'].columns])
                         st.dataframe(results['nb_data'].head(10))
                         
                         # Download button
@@ -411,7 +412,8 @@ def main():
                     if len(results['cancellation_data']) > 0:
                         st.subheader("❌ Sample Cancellation Data")
                         st.write("**Columns in this data:**")
-                        st.write(list(results['cancellation_data'].columns))
+                        # Force display of actual column names
+                        st.write([str(col) for col in results['cancellation_data'].columns])
                         st.dataframe(results['cancellation_data'].head(10))
                         
                         st.download_button(
@@ -424,7 +426,8 @@ def main():
                     if len(results['reinstatement_data']) > 0:
                         st.subheader("🔄 Sample Reinstatement Data")
                         st.write("**Columns in this data:**")
-                        st.write(list(results['reinstatement_data'].columns))
+                        # Force display of actual column names
+                        st.write([str(col) for col in results['reinstatement_data'].columns])
                         st.dataframe(results['reinstatement_data'].head(10))
                         
                         st.download_button(
