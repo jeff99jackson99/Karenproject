@@ -342,6 +342,14 @@ def rename_columns_with_meaning(df, column_mapping):
     # Apply the renaming
     renamed_df = renamed_df.rename(columns=column_rename_map)
     
+    # Debug: Show what was renamed
+    st.write(f"🔍 **Column renaming debug for {len(column_rename_map)} columns:**")
+    for old_name, new_name in column_rename_map.items():
+        st.write(f"  {old_name} → {new_name}")
+    
+    # Debug: Show final column names
+    st.write(f"🔍 **Final column names (first 10):** {list(renamed_df.columns)[:10]}")
+    
     return renamed_df, column_rename_map
 
 def main():
@@ -399,6 +407,7 @@ def main():
                         st.write("**Columns in this data:**")
                         # Force display of actual column names
                         st.write([str(col) for col in results['nb_data'].columns])
+                        st.write(f"**Dataframe info:** Shape: {results['nb_data'].shape}, Columns: {len(results['nb_data'].columns)}")
                         st.dataframe(results['nb_data'].head(10))
                         
                         # Download button
@@ -414,6 +423,7 @@ def main():
                         st.write("**Columns in this data:**")
                         # Force display of actual column names
                         st.write([str(col) for col in results['cancellation_data'].columns])
+                        st.write(f"**Dataframe info:** Shape: {results['cancellation_data'].shape}, Columns: {len(results['cancellation_data'].columns)}")
                         st.dataframe(results['cancellation_data'].head(10))
                         
                         st.download_button(
@@ -428,6 +438,7 @@ def main():
                         st.write("**Columns in this data:**")
                         # Force display of actual column names
                         st.write([str(col) for col in results['reinstatement_data'].columns])
+                        st.write(f"**Dataframe info:** Shape: {results['reinstatement_data'].shape}, Columns: {len(results['reinstatement_data'].columns)}")
                         st.dataframe(results['reinstatement_data'].head(10))
                         
                         st.download_button(
