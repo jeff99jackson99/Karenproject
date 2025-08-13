@@ -204,7 +204,8 @@ def main():
             # Download buttons
             if len(results.get('nb_data', pd.DataFrame())) > 0:
                 nb_buffer = io.BytesIO()
-                results['nb_data'].to_excel(nb_buffer, index=False)
+                with pd.ExcelWriter(nb_buffer, engine='openpyxl') as writer:
+                    results['nb_data'].to_excel(writer, index=False, sheet_name='New Business Data')
                 nb_buffer.seek(0)
                 st.download_button(
                     label="📥 Download New Business Data",
@@ -215,7 +216,8 @@ def main():
             
             if len(results.get('cancellation_data', pd.DataFrame())) > 0:
                 c_buffer = io.BytesIO()
-                results['cancellation_data'].to_excel(c_buffer, index=False)
+                with pd.ExcelWriter(c_buffer, engine='openpyxl') as writer:
+                    results['cancellation_data'].to_excel(writer, index=False, sheet_name='Cancellation Data')
                 c_buffer.seek(0)
                 st.download_button(
                     label="📥 Download Cancellation Data",
@@ -226,7 +228,8 @@ def main():
             
             if len(results.get('reinstatement_data', pd.DataFrame())) > 0:
                 r_buffer = io.BytesIO()
-                results['reinstatement_data'].to_excel(r_buffer, index=False)
+                with pd.ExcelWriter(r_buffer, engine='openpyxl') as writer:
+                    results['reinstatement_data'].to_excel(writer, index=False, sheet_name='Reinstatement Data')
                 r_buffer.seek(0)
                 st.download_button(
                     label="📥 Download Reinstatement Data",
