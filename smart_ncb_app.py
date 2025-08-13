@@ -301,16 +301,40 @@ def process_transaction_data(df, admin_columns):
         nb_filtered_3 = nb_df[admin_gt_zero >= 1]
         st.write(f"  Approach 3 (≥1 Admin > 0): {len(nb_filtered_3)} records")
         
-        # Use the most appropriate filtering approach
-        if len(nb_filtered_1) > 0:
-            nb_filtered = nb_filtered_1
-            st.write(f"✅ **Using Approach 1 (Sum > 0): {len(nb_filtered)} records**")
-        elif len(nb_filtered_2) > 0:
-            nb_filtered = nb_filtered_2
-            st.write(f"✅ **Using Approach 2 (≥2 Admin > 0): {len(nb_filtered)} records**")
-        else:
-            nb_filtered = nb_filtered_3
-            st.write(f"✅ **Using Approach 3 (≥1 Admin > 0): {len(nb_filtered)} records**")
+        # Approach 4: EXACT USER REQUIREMENT - ALL 4 Admin amounts > 0 AND sum > 0
+        nb_filtered_4 = nb_df[
+            (nb_df['Admin_Sum'] > 0) &
+            (nb_df[admin_cols[0]] > 0) &
+            (nb_df[admin_cols[1]] > 0) &
+            (nb_df[admin_cols[2]] > 0) &
+            (nb_df[admin_cols[3]] > 0)
+        ]
+        st.write(f"  Approach 4 (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered_4)} records")
+        
+        # Use the EXACT user requirement (Approach 4)
+        nb_filtered = nb_filtered_4
+        st.write(f"✅ **Using EXACT user requirement (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered)} records**")
+        
+        # Show detailed breakdown of why records are filtered out
+        st.write(f"🔍 **Detailed filtering breakdown:**")
+        st.write(f"  Records with Admin Sum > 0: {len(nb_filtered_1)}")
+        st.write(f"  Records with ALL 4 Admin > 0: {len(nb_filtered_4)}")
+        st.write(f"  Records filtered out by Admin requirement: {len(nb_filtered_1) - len(nb_filtered_4)}")
+        
+        # Show sample of records that meet sum > 0 but not all 4 Admin > 0
+        if len(nb_filtered_1) > len(nb_filtered_4):
+            sample_filtered_out = nb_df[
+                (nb_df['Admin_Sum'] > 0) &
+                ~((nb_df[admin_cols[0]] > 0) &
+                  (nb_df[admin_cols[1]] > 0) &
+                  (nb_df[admin_cols[2]] > 0) &
+                  (nb_df[admin_cols[3]] > 0))
+            ].head(5)
+            
+            st.write(f"🔍 **Sample records filtered out (Sum > 0 but not all 4 Admin > 0):**")
+            for i, col in enumerate(admin_cols):
+                st.write(f"  {col}: {sample_filtered_out[col].tolist()}")
+            st.write(f"  Admin Sum: {sample_filtered_out['Admin_Sum'].tolist()}")
         
         # Filter C/R data (sum != 0)
         cr_df = df[c_mask | r_mask].copy()
