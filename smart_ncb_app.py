@@ -60,12 +60,13 @@ def find_admin_columns(df, column_mapping):
                         elif 'Dealer' in desc:
                             admin_columns['Admin 10'] = col_name
     
-    # If we don't have enough admin columns, try to find them by position
+    # If we don't have enough admin columns, try to find them by content analysis
     if len(admin_columns) < 4:
-        st.warning("⚠️ Could not identify all Admin columns from mapping, trying position-based detection...")
+        st.warning("⚠️ Could not identify all Admin columns from mapping, trying content-based detection...")
         
-        # Look for numeric columns that might be admin amounts
-        numeric_cols = []
+        # Look for columns that might contain Admin amounts by analyzing their content
+        potential_admin_cols = []
+        
         for col in df.columns:
             try:
                 # Skip datetime columns
@@ -75,28 +76,42 @@ def find_admin_columns(df, column_mapping):
                 # Try to convert to numeric
                 numeric_values = pd.to_numeric(df[col], errors='coerce')
                 if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
-                    # Only include columns that are actually numeric
-                    numeric_cols.append(col)
+                    # Check if this column has meaningful non-zero values
+                    non_zero_count = (numeric_values > 0).sum()
+                    total_count = len(numeric_values)
+                    
+                    # Only consider columns with a reasonable number of non-zero values
+                    if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
+                        potential_admin_cols.append({
+                            'column': col,
+                            'non_zero_count': non_zero_count,
+                            'total_count': total_count,
+                            'non_zero_ratio': non_zero_count / total_count
+                        })
             except:
                 pass
         
-        st.write(f"🔍 **Numeric columns found:** {len(numeric_cols)}")
-        st.write(f"  Sample columns: {numeric_cols[:10]}")
+        # Sort by non-zero ratio to find the most likely Admin columns
+        potential_admin_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
         
-        # Assign admin columns by position (assuming they're in order)
-        if len(numeric_cols) >= 4:
+        st.write(f"🔍 **Potential Admin columns found:** {len(potential_admin_cols)}")
+        for i, col_info in enumerate(potential_admin_cols[:10]):  # Show top 10
+            st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
+        
+        # Select the top 4 columns as Admin columns
+        if len(potential_admin_cols) >= 4:
             admin_columns = {
-                'Admin 3': numeric_cols[0] if len(numeric_cols) > 0 else None,
-                'Admin 4': numeric_cols[1] if len(numeric_cols) > 1 else None,
-                'Admin 9': numeric_cols[2] if len(numeric_cols) > 2 else None,
-                'Admin 10': numeric_cols[3] if len(numeric_cols) > 3 else None
+                'Admin 3': potential_admin_cols[0]['column'],
+                'Admin 4': potential_admin_cols[1]['column'], 
+                'Admin 9': potential_admin_cols[2]['column'],
+                'Admin 10': potential_admin_cols[3]['column']
             }
             
-            st.write(f"✅ **Admin columns assigned by position:**")
+            st.write(f"✅ **Admin columns assigned by content analysis:**")
             for admin_type, col_name in admin_columns.items():
                 st.write(f"  {admin_type}: {col_name}")
         else:
-            st.error(f"❌ Not enough numeric columns found. Need 4, found {len(numeric_cols)}")
+            st.error(f"❌ Not enough potential Admin columns found. Need 4, found {len(potential_admin_cols)}")
     
     return admin_columns
 
