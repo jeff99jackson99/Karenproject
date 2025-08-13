@@ -127,7 +127,30 @@ def process_excel_data_smart(uploaded_file):
             
             if len(admin_columns) >= 4:
                 # Process the data
-                return process_transaction_data(df, admin_columns)
+                results = process_transaction_data(df, admin_columns)
+                
+                if results:
+                    # Rename columns with meaningful names
+                    renamed_nb, nb_rename_map = rename_columns_with_meaning(results['nb_data'], column_mapping)
+                    renamed_cancellation, c_rename_map = rename_columns_with_meaning(results['cancellation_data'], column_mapping)
+                    renamed_reinstatement, r_rename_map = rename_columns_with_meaning(results['reinstatement_data'], column_mapping)
+                    
+                    # Show column renaming information
+                    st.write("🔍 **Column Renaming Applied:**")
+                    if nb_rename_map:
+                        st.write("  **New Business columns renamed:**")
+                        for old_name, new_name in nb_rename_map.items():
+                            st.write(f"    {old_name} → {new_name}")
+                    
+                    # Update results with renamed dataframes
+                    results['nb_data'] = renamed_nb
+                    results['cancellation_data'] = renamed_cancellation
+                    results['reinstatement_data'] = renamed_reinstatement
+                    results['column_mapping'] = column_mapping
+                    
+                    return results
+                else:
+                    return None
             else:
                 st.error(f"❌ Need at least 4 Admin columns, found {len(admin_columns)}")
                 return None
@@ -270,6 +293,34 @@ def create_excel_download(df, sheet_name):
         df.to_excel(writer, sheet_name=sheet_name, index=False)
     return output.getvalue()
 
+def rename_columns_with_meaning(df, column_mapping):
+    """Rename unnamed columns with their actual meanings."""
+    renamed_df = df.copy()
+    
+    # Create a mapping from unnamed columns to meaningful names
+    column_rename_map = {}
+    
+    for col_idx, desc in column_mapping.items():
+        if col_idx < len(df.columns):
+            col_name = df.columns[col_idx]
+            if 'Unnamed:' in str(col_name):
+                # Create a meaningful name from the description
+                clean_desc = str(desc).replace('(', '').replace(')', '').replace(' ', '_')
+                new_name = f"{clean_desc}"
+                column_rename_map[col_name] = new_name
+    
+    # Also rename some common columns we know about
+    for col in df.columns:
+        if 'RPT908' in str(col):
+            column_rename_map[col] = 'Coverage_Code'
+        elif 'Transaction Type' in str(df[col].iloc[0] if len(df) > 0 else ''):
+            column_rename_map[col] = 'Transaction_Type'
+    
+    # Apply the renaming
+    renamed_df = renamed_df.rename(columns=column_rename_map)
+    
+    return renamed_df, column_rename_map
+
 def main():
     st.title("🧠 Smart NCB Data Processor")
     st.markdown("**Automatically detects column structure and processes NCB data**")
@@ -313,9 +364,17 @@ def main():
                     st.subheader("🔍 Admin Columns Used")
                     st.write(f"**Columns processed:** {results['admin_columns']}")
                     
+                    # Show column mapping if available
+                    if 'column_mapping' in results:
+                        st.write("**Column meanings from Col Ref sheet:**")
+                        for col_idx, desc in results['column_mapping'].items():
+                            st.write(f"  Column {col_idx}: {desc}")
+                    
                     # Show sample data
                     if len(results['nb_data']) > 0:
                         st.subheader("🆕 Sample New Business Data")
+                        st.write("**Columns in this data:**")
+                        st.write(list(results['nb_data'].columns))
                         st.dataframe(results['nb_data'].head(10))
                         
                         # Download button
@@ -328,6 +387,8 @@ def main():
                     
                     if len(results['cancellation_data']) > 0:
                         st.subheader("❌ Sample Cancellation Data")
+                        st.write("**Columns in this data:**")
+                        st.write(list(results['cancellation_data'].columns))
                         st.dataframe(results['cancellation_data'].head(10))
                         
                         st.download_button(
@@ -339,6 +400,8 @@ def main():
                     
                     if len(results['reinstatement_data']) > 0:
                         st.subheader("🔄 Sample Reinstatement Data")
+                        st.write("**Columns in this data:**")
+                        st.write(list(results['reinstatement_data'].columns))
                         st.dataframe(results['reinstatement_data'].head(10))
                         
                         st.download_button(
