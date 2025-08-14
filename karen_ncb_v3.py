@@ -731,10 +731,37 @@ def analyze_data_structure(df):
 
 def create_excel_download_karen_v3(df, sheet_name):
     """Create Excel download for a dataframe with Karen 2.0 formatting."""
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name=sheet_name, index=False)
-    return output.getvalue()
+    try:
+        # Create a BytesIO buffer for the Excel file
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            # Get the workbook and worksheet objects
+            workbook = writer.book
+            worksheet = writer.sheets[sheet_name]
+            
+            # Format headers
+            header_format = workbook.add_format({
+                'bold': True,
+                'text_wrap': True,
+                'valign': 'top',
+                'fg_color': '#D7E4BC',
+                'border': 1
+            })
+            
+            # Apply header formatting
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                # Auto-adjust column width
+                worksheet.set_column(col_num, col_num, max(len(str(value)) + 2, 15))
+        
+        output.seek(0)
+        return output
+    except Exception as e:
+        st.error(f"Error creating Excel file: {str(e)}")
+        return None
 
 def rename_columns_with_meaning(df, column_mapping):
     """Rename unnamed columns with their actual meanings."""
@@ -796,148 +823,210 @@ def rename_columns_with_meaning(df, column_mapping):
     return renamed_df, column_rename_map
 
 def main():
+    st.set_page_config(
+        page_title="Karen NCB Data Processor - Version 3.0",
+        page_icon="📊",
+        layout="wide"
+    )
+    
     st.title("🚀 Karen NCB Data Processor - Version 3.0")
-    st.markdown("**Based on working logic with Karen 2.0 instructions**")
+    st.markdown("**Expected Output:** 2k-2500 rows in specific order with proper column mapping")
     
-    # Sidebar
-    with st.sidebar:
-        st.header("🔧 Karen v3.0 Processing")
-        st.markdown("**This app will:**")
-        st.markdown("• Use the working logic that gave ~1200 NB records")
-        st.markdown("• Apply Karen 2.0 column mapping requirements")
-        st.markdown("• Create separate worksheets for each data set")
-        st.markdown("• Generate 2,000-2,500 total records")
-    
-    # File upload
-    uploaded_file = st.file_uploader("Choose Excel file for processing", type=['xlsx', 'xls'])
+    # File upload section
+    st.header("📁 Upload Excel File")
+    uploaded_file = st.file_uploader(
+        "Upload Excel file with NCB data and 'Col Ref' sheet",
+        type=['xlsx', 'xls'],
+        help="Your file should have a 'Data' tab and a reference sheet (like 'Col Ref' or 'xref')"
+    )
     
     if uploaded_file is not None:
-        st.success(f"✅ File uploaded: {uploaded_file.name}")
-        st.write(f"📁 Size: {uploaded_file.size / 1024:.1f} KB")
-        
-        if st.button("🚀 Start Karen v3.0 Processing", type="primary", use_container_width=True):
-            with st.spinner("Karen v3.0 processing in progress..."):
-                results = process_excel_data_karen_v3(uploaded_file)
-                
-                if results:
-                    st.success("✅ Karen v3.0 processing complete!")
+        try:
+            # Load the Excel file
+            excel_data = pd.read_excel(uploaded_file, sheet_name=None)
+            
+            # Show available sheets
+            st.success(f"✅ **File loaded successfully!**")
+            st.write(f"🔍 **Available sheets:** {list(excel_data.keys())}")
+            
+            # Find the data sheet
+            data_sheet = None
+            for sheet_name in ['Data', 'data', 'DATA']:
+                if sheet_name in excel_data:
+                    data_sheet = sheet_name
+                    break
+            
+            if not data_sheet:
+                st.error("❌ **No 'Data' sheet found. Please ensure your file has a 'Data' tab.**")
+                return
+            
+            # Load the data
+            df = excel_data[data_sheet]
+            st.write(f"📊 **Data sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
+            
+            # Process the data
+            if st.button("🔄 **Process Data**", type="primary"):
+                with st.spinner("Processing data..."):
+                    # Process the data using the enhanced functions
+                    result = process_excel_data_karen_v3(df)
                     
-                    # Show results
-                    st.header("📊 Processing Results")
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("New Business", len(results['nb_data']))
-                    with col2:
-                        st.metric("Cancellations", len(results['cancellation_data']))
-                    with col3:
-                        st.metric("Reinstatements", len(results['reinstatement_data']))
-                    with col4:
-                        st.metric("Total Records", results['total_records'])
-                    
-                    # Show admin columns used
-                    st.subheader("🔍 Admin Columns Used")
-                    st.write(f"**Columns processed:** {results['admin_columns']}")
-                    
-                    # Show column mapping if available
-                    if 'column_mapping' in results:
-                        st.write("**Column meanings from Col Ref sheet:**")
-                        for col_idx, desc in results['column_mapping'].items():
-                            st.write(f"  Column {col_idx}: {desc}")
-                    
-                    # Show sample data
-                    if len(results['nb_data']) > 0:
-                        st.subheader("🆕 Sample New Business Data")
-                        st.write("**Columns in this data:**")
-                        # Force display of actual column names
-                        st.write([str(col) for col in results['nb_data'].columns])
-                        st.write(f"**Dataframe info:** Shape: {results['nb_data'].shape}, Columns: {len(results['nb_data'].columns)}")
-                        st.dataframe(results['nb_data'].head(10))
+                    if result is not None:
+                        nb_df, c_df, r_df = result
                         
-                        # Download button
-                        st.download_button(
-                            label="Download New Business Data",
-                            data=create_excel_download_karen_v3(results['nb_data'], 'New Business'),
-                            file_name=f"NB_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    
-                    if len(results['cancellation_data']) > 0:
-                        st.subheader("❌ Sample Cancellation Data")
-                        st.write("**Columns in this data:**")
-                        # Force display of actual column names
-                        st.write([str(col) for col in results['cancellation_data'].columns])
-                        st.write(f"**Dataframe info:** Shape: {results['cancellation_data'].shape}, Columns: {len(results['cancellation_data'].columns)}")
-                        st.dataframe(results['cancellation_data'].head(10))
+                        # Display results
+                        st.header("📊 Processing Results")
                         
-                        st.download_button(
-                            label="Download Cancellation Data",
-                            data=create_excel_download_karen_v3(results['cancellation_data'], 'Cancellations'),
-                            file_name=f"Cancellation_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    
-                    if len(results['reinstatement_data']) > 0:
-                        st.subheader("🔄 Sample Reinstatement Data")
-                        st.write("**Columns in this data:**")
-                        # Force display of actual column names
-                        st.write([str(col) for col in results['reinstatement_data'].columns])
-                        st.write(f"**Dataframe info:** Shape: {results['reinstatement_data'].shape}, Columns: {len(results['reinstatement_data'].columns)}")
-                        st.dataframe(results['reinstatement_data'].head(10))
+                        # Summary statistics
+                        total_records = len(nb_df) + len(c_df) + len(r_df)
+                        st.write(f"**Total Records:** {total_records}")
                         
-                        st.download_button(
-                            label="Download Reinstatement Data",
-                            data=create_excel_download_karen_v3(results['reinstatement_data'], 'Reinstatements'),
-                            file_name=f"Reinstatement_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    
-                    # Karen 2.0: Create Excel file with separate worksheets
-                    st.write("---")
-                    st.subheader("📥 Karen 2.0 Excel Output (3 Separate Worksheets)")
-                    
-                    if st.button("📥 Download Complete Excel File (3 Worksheets)", type="primary"):
+                        # Breakdown by transaction type
+                        st.write("**Breakdown by Transaction Type:**")
+                        st.write(f"- **NB (New Business):** {len(nb_df)} records")
+                        st.write(f"- **C (Cancellation):** {len(c_df)} records") 
+                        st.write(f"- **R (Reinstatement):** {len(r_df)} records")
+                        
+                        # Show sample data in collapsible sections
+                        with st.expander("📋 **Sample New Business Data (First 5 rows)**", expanded=False):
+                            if len(nb_df) > 0:
+                                st.dataframe(nb_df.head(), use_container_width=True)
+                            else:
+                                st.write("No New Business data found.")
+                        
+                        with st.expander("📋 **Sample Cancellation Data (First 5 rows)**", expanded=False):
+                            if len(c_df) > 0:
+                                st.dataframe(c_df.head(), use_container_width=True)
+                            else:
+                                st.write("No Cancellation data found.")
+                        
+                        with st.expander("📋 **Sample Reinstatement Data (First 5 rows)**", expanded=False):
+                            if len(r_df) > 0:
+                                st.dataframe(r_df.head(), use_container_width=True)
+                            else:
+                                st.write("No Reinstatement data found.")
+                        
+                        # Download options
+                        st.header("💾 Download Options")
+                        
+                        # Individual downloads
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            if len(nb_df) > 0:
+                                nb_download = create_excel_download_karen_v3(nb_df, "New_Contracts_NB")
+                                if nb_download:
+                                    st.download_button(
+                                        label=f"📥 Download NB Data ({len(nb_df)} rows)",
+                                        data=nb_download.getvalue(),
+                                        file_name=f"NCB_New_Business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
+                        
+                        with col2:
+                            if len(c_df) > 0:
+                                c_download = create_excel_download_karen_v3(c_df, "Cancellations_C")
+                                if c_download:
+                                    st.download_button(
+                                        label=f"📥 Download C Data ({len(c_df)} rows)",
+                                        data=c_download.getvalue(),
+                                        file_name=f"NCB_Cancellations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
+                        
+                        with col3:
+                            if len(r_df) > 0:
+                                r_download = create_excel_download_karen_v3(r_df, "Reinstatements_R")
+                                if r_download:
+                                    st.download_button(
+                                        label=f"📥 Download R Data ({len(r_df)} rows)",
+                                        data=r_download.getvalue(),
+                                        file_name=f"NCB_Reinstatements_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    )
+                        
+                        # Combined download - Create a single Excel file with multiple sheets
+                        st.write("---")
+                        st.subheader("📊 **Combined Download (All Data in One File)**")
+                        
                         try:
-                            # Create Excel file with separate worksheets as specified in Karen 2.0
-                            output = io.BytesIO()
-                            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                                # Data Set 1 - New Contracts (NB)
-                                if len(results['nb_data']) > 0:
-                                    results['nb_data'].to_excel(writer, sheet_name='New_Contracts_NB', index=False)
-                                    st.write(f"✅ **New Contracts worksheet created:** {len(results['nb_data'])} records")
-                                
-                                # Data Set 2 - Reinstatements (R)
-                                if len(results['reinstatement_data']) > 0:
-                                    results['reinstatement_data'].to_excel(writer, sheet_name='Reinstatements_R', index=False)
-                                    st.write(f"✅ **Reinstatements worksheet created:** {len(results['reinstatement_data'])} records")
-                                
-                                # Data Set 3 - Cancellations (C)
-                                if len(results['cancellation_data']) > 0:
-                                    results['cancellation_data'].to_excel(writer, sheet_name='Cancellations_C', index=False)
-                                    st.write(f"✅ **Cancellations worksheet created:** {len(results['cancellation_data'])} records")
+                            # Create combined Excel file
+                            combined_output = io.BytesIO()
                             
-                            output.seek(0)
+                            with pd.ExcelWriter(combined_output, engine='xlsxwriter') as writer:
+                                # Write each dataframe to a separate sheet
+                                if len(nb_df) > 0:
+                                    nb_df.to_excel(writer, sheet_name="New_Contracts_NB", index=False)
+                                
+                                if len(c_df) > 0:
+                                    c_df.to_excel(writer, sheet_name="Cancellations_C", index=False)
+                                
+                                if len(r_df) > 0:
+                                    r_df.to_excel(writer, sheet_name="Reinstatements_R", index=False)
+                                
+                                # Get the workbook for formatting
+                                workbook = writer.book
+                                
+                                # Format each sheet
+                                for sheet_name in writer.sheets:
+                                    worksheet = writer.sheets[sheet_name]
+                                    
+                                    # Format headers
+                                    header_format = workbook.add_format({
+                                        'bold': True,
+                                        'text_wrap': True,
+                                        'valign': 'top',
+                                        'fg_color': '#D7E4BC',
+                                        'border': 1
+                                    })
+                                    
+                                    # Get the dataframe for this sheet
+                                    if sheet_name == "New_Contracts_NB":
+                                        sheet_df = nb_df
+                                    elif sheet_name == "Cancellations_C":
+                                        sheet_df = c_df
+                                    elif sheet_name == "Reinstatements_R":
+                                        sheet_df = r_df
+                                    else:
+                                        continue
+                                    
+                                    # Apply header formatting and auto-adjust column widths
+                                    for col_num, value in enumerate(sheet_df.columns.values):
+                                        worksheet.write(0, col_num, value, header_format)
+                                        # Auto-adjust column width
+                                        max_width = max(len(str(value)) + 2, 15)
+                                        # Also check data width
+                                        for row_num in range(1, min(len(sheet_df) + 1, 100)):  # Check first 100 rows
+                                            try:
+                                                cell_value = str(sheet_df.iloc[row_num - 1, col_num])
+                                                max_width = max(max_width, len(cell_value) + 2)
+                                            except:
+                                                pass
+                                        worksheet.set_column(col_num, col_num, max_width)
                             
-                            # Create download button for the complete file
+                            combined_output.seek(0)
+                            
+                            # Create download button
                             st.download_button(
-                                label="📥 Download Complete Excel File (3 Worksheets)",
-                                data=output.getvalue(),
-                                file_name=f"Karen_NCB_v3_Complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                label=f"📥 Download All Data Combined ({total_records} total rows)",
+                                data=combined_output.getvalue(),
+                                file_name=f"NCB_Complete_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key="combined_download"  # Unique key to prevent conflicts
                             )
                             
-                            st.success(f"✅ **Karen 2.0 Excel file generated successfully!**")
-                            st.write(f"📊 **File contains:**")
-                            st.write(f"  • New Contracts (NB): {len(results['nb_data'])} records")
-                            st.write(f"  • Reinstatements (R): {len(results['reinstatement_data'])} records")
-                            st.write(f"  • Cancellations (C): {len(results['cancellation_data'])} records")
-                            st.write(f"  • **Total:** {results['total_records']} records across 3 worksheets")
-                            st.write(f"  • **Expected:** 2,000-2,500 total records")
-                            
                         except Exception as e:
-                            st.error(f"❌ Error generating Karen 2.0 Excel file: {str(e)}")
-                            st.write(f"Debug info: {type(e).__name__}")
-                else:
-                    st.error("❌ Karen v3.0 processing failed. Check the error messages above.")
+                            st.error(f"❌ **Error creating combined download:** {str(e)}")
+                            st.write("**Debug info:**")
+                            st.write(f"- NB DataFrame shape: {nb_df.shape if nb_df is not None else 'None'}")
+                            st.write(f"- C DataFrame shape: {c_df.shape if c_df is not None else 'None'}")
+                            st.write(f"- R DataFrame shape: {r_df.shape if r_df is not None else 'None'}")
+                    
+                    else:
+                        st.error("❌ **Data processing failed. Please check your file format.**")
+        
+        except Exception as e:
+            st.error(f"❌ **Error loading file:** {str(e)}")
+            st.write("**Please ensure your file is a valid Excel file (.xlsx or .xls) with the required sheets.**")
 
 if __name__ == "__main__":
     main()
