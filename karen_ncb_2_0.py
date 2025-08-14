@@ -40,60 +40,68 @@ def detect_column_structure_v2(excel_file):
         st.write(f"🔍 **Reference sheet first few rows:**")
         st.dataframe(col_ref_df.head(10))
         
-        # Based on the reference sheet structure, we need to map:
-        # Admin 3 Label -> Agent NCB, Admin 3 Amount -> corresponding value
-        # Admin 4 Label -> Dealer NCB, Admin 4 Amount -> corresponding value
-        # Admin 9 Label -> Agent NCB Offset, Admin 9 Amount -> corresponding value
-        # Admin 10 Label -> Dealer NCB Offset, Admin 10 Amount -> corresponding value
-        
+        # Look for the specific Admin column structure
         column_mapping = {}
         label_columns = {}
         amount_columns = {}
         
-        # Look for the specific Admin column structure
+        # Search through all rows for Admin column information
         for idx, row in col_ref_df.iterrows():
             row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
             
-            # Check if this row contains the Admin column mapping
-            if 'ADMIN 3 LABEL' in row_str and 'ADMIN 4 LABEL' in row_str:
-                st.write(f"🔍 **Found Admin column mapping row {idx}**")
+            # Check if this row contains Admin column information
+            if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                st.write(f"🔍 **Found potential Admin row {idx}:** {row_str[:100]}...")
                 
-                # Map the Admin columns based on the reference sheet structure
+                # Look for Admin columns in this row
                 for col_idx, value in enumerate(row):
                     if pd.notna(value) and str(value).strip():
                         desc = str(value).strip()
                         column_mapping[col_idx] = desc
                         
-                        # Identify Admin Label columns
-                        if desc in ['Admin 3 Label', 'Admin 4 Label', 'Admin 9 Label', 'Admin 10 Label']:
+                        # Check if this is an Admin Label column
+                        if any(keyword in desc.upper() for keyword in ['ADMIN', 'NCB']) and 'AMOUNT' not in desc.upper():
                             label_columns[col_idx] = desc
-                            # The corresponding Amount column should be the next column over
+                            st.write(f"  ✅ **Found Label column:** {desc} at position {col_idx}")
+                            
+                            # Look for the corresponding Amount column (next column over)
                             if col_idx + 1 < len(row):
-                                amount_columns[col_idx + 1] = f"Amount for {desc}"
+                                next_col_val = row.iloc[col_idx + 1]
+                                if pd.notna(next_col_val) and str(next_col_val).strip():
+                                    next_desc = str(next_col_val).strip()
+                                    if 'AMOUNT' in next_desc.upper():
+                                        amount_columns[col_idx + 1] = next_desc
+                                        st.write(f"    ✅ **Found Amount column:** {next_desc} at position {col_idx + 1}")
                 
-                break
+                # If we found Admin columns, we can stop searching
+                if label_columns:
+                    break
         
-        # If we didn't find the exact structure, try alternative approaches
+        # If we still don't have Admin columns, try a different approach
         if not label_columns:
             st.write("🔄 **Trying alternative Admin column detection...**")
             
-            # Look for any row containing Admin and NCB information
-            for idx, row in col_ref_df.iterrows():
-                row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
-                if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                    st.write(f"🔍 **Found potential Admin row {idx}:** {row_str[:100]}...")
+            # Look for columns that contain "Admin" in their names
+            for col_idx, col_name in enumerate(col_ref_df.columns):
+                if pd.notna(col_name) and 'ADMIN' in str(col_name).upper():
+                    st.write(f"🔍 **Found Admin column:** {col_name} at position {col_idx}")
                     
-                    for col_idx, value in enumerate(row):
-                        if pd.notna(value) and str(value).strip():
-                            desc = str(value).strip()
-                            column_mapping[col_idx] = desc
-                            
-                            # Look for Admin Label columns
-                            if 'ADMIN' in desc.upper() and 'LABEL' in desc.upper():
+                    # Check if this column contains Admin information
+                    col_values = col_ref_df[col_name].dropna()
+                    for val in col_values:
+                        if pd.notna(val) and str(val).strip():
+                            desc = str(val).strip()
+                            if any(keyword in desc.upper() for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']) and 'AMOUNT' not in desc.upper():
                                 label_columns[col_idx] = desc
-                                # Amount column is next column over
-                                if col_idx + 1 < len(row):
-                                    amount_columns[col_idx + 1] = f"Amount for {desc}"
+                                st.write(f"  ✅ **Found Label value:** {desc}")
+                                
+                                # Look for corresponding Amount column
+                                if col_idx + 1 < len(col_ref_df.columns):
+                                    next_col = col_ref_df.columns[col_idx + 1]
+                                    if pd.notna(next_col) and 'AMOUNT' in str(next_col).upper():
+                                        amount_columns[col_idx + 1] = str(next_col)
+                                        st.write(f"    ✅ **Found Amount column:** {next_col}")
+                                break
         
         if label_columns:
             st.write("🔍 **Column Structure Detected:**")
@@ -110,6 +118,22 @@ def detect_column_structure_v2(excel_file):
             return column_mapping, label_columns, amount_columns
         else:
             st.warning("⚠️ No Admin column mapping found in reference sheet")
+            st.write("🔍 **Debugging: Let's examine the reference sheet more carefully...**")
+            
+            # Show more detailed information about the reference sheet
+            st.write("🔍 **All column names in reference sheet:**")
+            for i, col_name in enumerate(col_ref_df.columns):
+                st.write(f"  Column {i}: {col_name}")
+            
+            st.write("🔍 **Sample values from first few rows:**")
+            for i in range(min(5, len(col_ref_df))):
+                row_data = []
+                for j, val in enumerate(col_ref_df.iloc[i]):
+                    if pd.notna(val) and str(val).strip():
+                        row_data.append(f"Col{j}:{str(val).strip()}")
+                if row_data:
+                    st.write(f"  Row {i}: {' | '.join(row_data[:10])}")
+            
             return {}, {}, {}
         
     except Exception as e:
