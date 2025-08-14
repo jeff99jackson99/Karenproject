@@ -57,12 +57,16 @@ def process_excel_data_karen_2_0(uploaded_file):
                     st.write(f"  {col_letter}: {col_name}")
                 
                 if len(ncb_columns) >= 7 and len(required_cols) >= len(['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U']):
+                    # Run comprehensive data structure check
+                    structure_check = check_data_structure(df, ncb_columns, required_cols)
+                    
                     # Process the data
                     results = process_transaction_data_karen_2_0(df, ncb_columns, required_cols)
                     
                     if results:
                         results['ncb_columns'] = ncb_columns
                         results['required_cols'] = required_cols
+                        results['structure_check'] = structure_check
                         
                         return results
                     else:
@@ -324,10 +328,46 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             ncb_columns.get('AY'), ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
+        # Debug: Show selected columns for each dataset
+        st.write("🔍 **DEBUG: Selected columns for each dataset:**")
+        st.write(f"  NB columns: {nb_output_cols}")
+        st.write(f"  R columns: {r_output_cols}")
+        st.write(f"  C columns: {c_output_cols}")
+        
+        # Check for None values in column selection
+        nb_none_count = sum(1 for col in nb_output_cols if col is None)
+        r_none_count = sum(1 for col in r_output_cols if col is None)
+        c_none_count = sum(1 for col in c_output_cols if col is None)
+        
+        if nb_none_count > 0:
+            st.warning(f"⚠️ **NB dataset has {nb_none_count} None columns**")
+        if r_none_count > 0:
+            st.warning(f"⚠️ **R dataset has {r_none_count} None columns**")
+        if c_none_count > 0:
+            st.warning(f"⚠️ **C dataset has {c_none_count} None columns**")
+        
         # Filter dataframes to only include available columns
         nb_output_cols = [col for col in nb_output_cols if col is not None and col in df.columns]
         r_output_cols = [col for col in r_output_cols if col is not None and col in df.columns]
         c_output_cols = [col for col in c_output_cols if col is not None and col in df.columns]
+        
+        # Debug: Show filtered columns
+        st.write("🔍 **DEBUG: Filtered columns (None removed):**")
+        st.write(f"  NB filtered: {len(nb_output_cols)} columns")
+        st.write(f"  R filtered: {len(r_output_cols)} columns")
+        st.write(f"  C filtered: {len(c_output_cols)} columns")
+        
+        # Check for duplicates in column selection
+        nb_duplicates = [col for col in set(nb_output_cols) if nb_output_cols.count(col) > 1]
+        r_duplicates = [col for col in set(r_output_cols) if r_output_cols.count(col) > 1]
+        c_duplicates = [col for col in set(c_output_cols) if c_output_cols.count(col) > 1]
+        
+        if nb_duplicates:
+            st.error(f"❌ **NB dataset has duplicate columns:** {nb_duplicates}")
+        if r_duplicates:
+            st.error(f"❌ **R dataset has duplicate columns:** {r_duplicates}")
+        if c_duplicates:
+            st.error(f"❌ **C dataset has duplicate columns:** {c_duplicates}")
         
         # Create output dataframes
         nb_output = nb_filtered[nb_output_cols].copy()
@@ -373,6 +413,19 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         if len(c_headers) == len(c_output.columns):
             c_output.columns = c_headers
         
+        # Fix any duplicate column names
+        nb_output = fix_duplicate_columns(nb_output, "New Business (NB)")
+        r_output = fix_duplicate_columns(r_output, "Reinstatements (R)")
+        c_output = fix_duplicate_columns(c_output, "Cancellations (C)")
+        
+        # Validate the output dataframes
+        validation_results = validate_output_dataframes(nb_output, r_output, c_output, ncb_columns, required_cols)
+        
+        if validation_results['errors']:
+            st.warning("⚠️ **Validation Issues Found:**")
+            for error in validation_results['errors']:
+                st.write(error)
+        
         st.write(f"🔍 **Output dataframe shapes:**")
         st.write(f"  NB: {nb_output.shape}")
         st.write(f"  R: {r_output.shape}")
@@ -382,8 +435,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'nb_data': nb_output,
             'reinstatement_data': r_output,
             'cancellation_data': c_output,
-            'ncb_columns': ncb_columns,
-            'total_records': len(nb_output) + len(r_output) + len(c_output)
+            'validation_results': validation_results
         }
         
     except Exception as e:
@@ -410,6 +462,162 @@ def create_excel_download_karen_2_0(results):
             results['cancellation_data'].to_excel(writer, sheet_name='Data Set 3 - Cancellations', index=False)
     
     return output.getvalue()
+
+def validate_output_dataframes(nb_output, r_output, c_output, ncb_columns, required_cols):
+    """Validate output dataframes for common issues."""
+    validation_results = {
+        'nb_valid': True,
+        'r_valid': True,
+        'c_valid': True,
+        'errors': []
+    }
+    
+    # Check for duplicate column names
+    for name, df, expected_cols in [
+        ('New Business (NB)', nb_output, 17),
+        ('Reinstatements (R)', r_output, 17),
+        ('Cancellations (C)', c_output, 21)
+    ]:
+        if df is None or df.empty:
+            validation_results[f'{name.lower().replace(" ", "_").replace("(", "").replace(")", "")}_valid'] = False
+            validation_results['errors'].append(f"❌ {name}: DataFrame is None or empty")
+            continue
+            
+        # Check column count
+        if len(df.columns) != expected_cols:
+            validation_results['errors'].append(f"⚠️ {name}: Expected {expected_cols} columns, got {len(df.columns)}")
+        
+        # Check for duplicate column names
+        duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+        if duplicate_cols:
+            validation_results[f'{name.lower().replace(" ", "_").replace("(", "").replace(")", "")}_valid'] = False
+            validation_results['errors'].append(f"❌ {name}: Duplicate columns found: {duplicate_cols}")
+        
+        # Check for None or empty column names
+        empty_cols = [col for col in df.columns if col is None or str(col).strip() == '' or str(col) == 'nan']
+        if empty_cols:
+            validation_results['errors'].append(f"⚠️ {name}: Empty/None column names: {empty_cols}")
+        
+        # Check for missing required columns
+        if name == 'New Business (NB)' or name == 'Reinstatements (R)':
+            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']
+        else:  # Cancellations
+            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'Z', 'AE', 'AB', 'AA', 'AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']
+        
+        missing_cols = []
+        for col_letter in required_cols_list:
+            if col_letter in ['AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']:
+                col_name = ncb_columns.get(col_letter)
+            else:
+                col_name = required_cols.get(col_letter)
+            
+            if col_name and col_name not in df.columns:
+                missing_cols.append(f"{col_letter} ({col_name})")
+        
+        if missing_cols:
+            validation_results['errors'].append(f"⚠️ {name}: Missing required columns: {missing_cols}")
+    
+    return validation_results
+
+def fix_duplicate_columns(df, dataset_name):
+    """Fix duplicate column names by adding suffixes."""
+    if df is None or df.empty:
+        return df
+    
+    # Check for duplicate columns
+    duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+    if not duplicate_cols:
+        return df
+    
+    # Create a new DataFrame with unique column names
+    new_columns = []
+    seen_columns = {}
+    
+    for col in df.columns:
+        if col in seen_columns:
+            seen_columns[col] += 1
+            new_col = f"{col}_{seen_columns[col]}"
+        else:
+            seen_columns[col] = 0
+            new_col = col
+        
+        new_columns.append(new_col)
+    
+    # Create new DataFrame with fixed column names
+    fixed_df = df.copy()
+    fixed_df.columns = new_columns
+    
+    return fixed_df
+
+def check_data_structure(df, ncb_columns, required_cols):
+    """Comprehensive check of data structure to identify issues."""
+    st.write("🔍 **COMPREHENSIVE DATA STRUCTURE CHECK**")
+    
+    # Check column names
+    st.write(f"📊 **Total columns:** {len(df.columns)}")
+    st.write(f"📊 **Total rows:** {len(df)}")
+    
+    # Check for duplicate column names in original data
+    duplicate_original = df.columns[df.columns.duplicated()].tolist()
+    if duplicate_original:
+        st.error(f"❌ **DUPLICATE COLUMNS IN ORIGINAL DATA:** {duplicate_original}")
+    else:
+        st.write("✅ **No duplicate columns in original data**")
+    
+    # Check for None/empty column names
+    empty_cols = [col for col in df.columns if col is None or str(col).strip() == '' or str(col) == 'nan']
+    if empty_cols:
+        st.warning(f"⚠️ **Empty/None column names:** {empty_cols}")
+    
+    # Check NCB columns
+    st.write("🔍 **NCB Column Mapping Check:**")
+    for ncb_type, col_name in ncb_columns.items():
+        if col_name in df.columns:
+            st.write(f"  ✅ {ncb_type}: {col_name} (exists)")
+            # Check data type and sample values
+            sample_vals = df[col_name].dropna().head(3).tolist()
+            st.write(f"    Sample values: {sample_vals}")
+        else:
+            st.error(f"  ❌ {ncb_type}: {col_name} (MISSING)")
+    
+    # Check required columns
+    st.write("🔍 **Required Column Mapping Check:**")
+    for col_letter, col_name in required_cols.items():
+        if col_name in df.columns:
+            st.write(f"  ✅ {col_letter}: {col_name} (exists)")
+        else:
+            st.error(f"  ❌ {col_letter}: {col_name} (MISSING)")
+    
+    # Check transaction types
+    transaction_col = required_cols.get('M')
+    if transaction_col and transaction_col in df.columns:
+        st.write("🔍 **Transaction Type Analysis:**")
+        unique_transactions = df[transaction_col].astype(str).unique()
+        st.write(f"  Unique values: {unique_transactions}")
+        
+        # Count each transaction type
+        for trans_type in ['NB', 'C', 'R']:
+            count = df[transaction_col].astype(str).str.upper().isin([trans_type]).sum()
+            st.write(f"  {trans_type}: {count}")
+    
+    # Check NCB sum calculation
+    st.write("🔍 **NCB Sum Calculation Check:**")
+    ncb_cols = list(ncb_columns.values())
+    if all(col in df.columns for col in ncb_cols):
+        # Calculate NCB sum for sample rows
+        sample_df = df.head(5)
+        for idx, row in sample_df.iterrows():
+            ncb_sum = sum(pd.to_numeric(row[col], errors='coerce') or 0 for col in ncb_cols)
+            st.write(f"  Row {idx}: NCB Sum = {ncb_sum}")
+    else:
+        st.error("❌ **Cannot calculate NCB sum - missing columns**")
+    
+    return {
+        'duplicate_columns': duplicate_original,
+        'empty_columns': empty_cols,
+        'missing_ncb': [col for col in ncb_columns.values() if col not in df.columns],
+        'missing_required': [col for col in required_cols.values() if col not in df.columns]
+    }
 
 def main():
     st.title("📊 Karen 2.0 NCB Data Processor")
