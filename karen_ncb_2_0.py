@@ -233,43 +233,51 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     nb_df = df[nb_mask].copy()
     
     # Apply the EXACT filtering logic that was working before (giving ~1200 records)
-    if len(label_columns) >= 4:
-        # Get the Admin amount columns (assuming they're in order)
-        admin_cols = list(label_columns.keys())[:4]
-        st.write(f"🔍 **Using Admin columns:** {admin_cols}")
+    if len(amount_columns) >= 4:
+        # Get the Admin AMOUNT columns (not label columns) - this is the key fix!
+        admin_amount_cols = list(amount_columns.keys())[:4]
+        st.write(f"🔍 **Using Admin AMOUNT columns:** {admin_amount_cols}")
         
-        # Convert Admin columns to numeric
-        for col in admin_cols:
+        # Convert Admin amount columns to numeric
+        for col in admin_amount_cols:
             nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
         
-        # Calculate Admin sum
-        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
+        # Calculate Admin sum from AMOUNT columns
+        nb_df['Admin_Sum'] = nb_df[admin_amount_cols].sum(axis=1)
         
         # Apply the EXACT user requirement: ALL 4 Admin amounts > 0 AND sum > 0
         nb_filtered = nb_df[
             (nb_df['Admin_Sum'] > 0) &
-            (nb_df[admin_cols[0]] > 0) &
-            (nb_df[admin_cols[1]] > 0) &
-            (nb_df[admin_cols[2]] > 0) &
-            (nb_df[admin_cols[3]] > 0)
+            (nb_df[admin_amount_cols[0]] > 0) &
+            (nb_df[admin_amount_cols[1]] > 0) &
+            (nb_df[admin_amount_cols[2]] > 0) &
+            (nb_df[admin_amount_cols[3]] > 0)
         ]
         
         st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using strict Admin > 0 logic)")
         st.write(f"  Expected: ~1200 records")
         st.write(f"  Actual: {len(nb_filtered)} records")
+        
+        # Show filtering breakdown for debugging
+        st.write(f"🔍 **Filtering breakdown:**")
+        st.write(f"  Records with Admin Sum > 0: {(nb_df['Admin_Sum'] > 0).sum()}")
+        st.write(f"  Records with ALL 4 Admin > 0: {len(nb_filtered)}")
+        st.write(f"  Records filtered out: {(nb_df['Admin_Sum'] > 0).sum() - len(nb_filtered)}")
+        
     else:
         nb_filtered = nb_df
         st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
+        st.write(f"  Reason: Only found {len(amount_columns)} Admin amount columns, need 4")
     
     # Process Cancellation data (negative/empty/0 values expected)
     c_df = df[c_mask].copy()
     
     # Apply filtering for cancellations (sum != 0)
-    if len(label_columns) >= 4:
-        admin_cols = list(label_columns.keys())[:4]
-        for col in admin_cols:
+    if len(amount_columns) >= 4:
+        admin_amount_cols = list(amount_columns.keys())[:4]
+        for col in admin_amount_cols:
             c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
-        c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
+        c_df['Admin_Sum'] = c_df[admin_amount_cols].sum(axis=1)
         c_filtered = c_df[c_df['Admin_Sum'] != 0]
         st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
     else:
@@ -280,11 +288,11 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     r_df = df[r_mask].copy()
     
     # Apply filtering for reinstatements (sum != 0)
-    if len(label_columns) >= 4:
-        admin_cols = list(label_columns.keys())[:4]
-        for col in admin_cols:
+    if len(amount_columns) >= 4:
+        admin_amount_cols = list(amount_columns.keys())[:4]
+        for col in admin_amount_cols:
             r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
-        r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
+        r_df['Admin_Sum'] = r_df[admin_amount_cols].sum(axis=1)
         r_filtered = r_df[r_df['Admin_Sum'] != 0]
         st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
     else:
