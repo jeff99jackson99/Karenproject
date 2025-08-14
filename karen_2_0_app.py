@@ -478,13 +478,13 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         
         # Show Admin sum statistics for debugging
         st.write(f"🔍 **Admin sum statistics:**")
-        st.write(f"  Min: {df_copy['Admin_Sum'].min()}")
-        st.write(f"  Max: {df_copy['Admin_Sum'].max()}")
-        st.write(f"  Mean: {df_copy['Admin_Sum'].mean():.2f}")
-        st.write(f"  Non-zero count: {(df_copy['Admin_Sum'] != 0).sum()}")
-        st.write(f"  Zero count: {(df_copy['Admin_Sum'] == 0).sum()}")
-        st.write(f"  Positive count: {(df_copy['Admin_Sum'] > 0).sum()}")
-        st.write(f"  Negative count: {(df_copy['Admin_Sum'] < 0).sum()}")
+        st.write(f"  Min: {df_copy['Admin_Sum_Numeric'].iloc[1:].min()}")
+        st.write(f"  Max: {df_copy['Admin_Sum_Numeric'].iloc[1:].max()}")
+        st.write(f"  Mean: {df_copy['Admin_Sum_Numeric'].iloc[1:].mean():.2f}")
+        st.write(f"  Non-zero count: {(df_copy['Admin_Sum_Numeric'].iloc[1:] != 0).sum()}")
+        st.write(f"  Zero count: {(df_copy['Admin_Sum_Numeric'].iloc[1:] == 0).sum()}")
+        st.write(f"  Positive count: {(df_copy['Admin_Sum_Numeric'].iloc[1:] > 0).sum()}")
+        st.write(f"  Negative count: {(df_copy['Admin_Sum_Numeric'].iloc[1:] < 0).sum()}")
         
         # Show transaction type counts for debugging
         st.write(f"🔍 **Transaction type counts:**")
@@ -493,9 +493,9 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         st.write(f"  Reinstatement records: {len(r_df)}")
         
         # Show how many of each transaction type meet the filtering criteria
-        nb_positive = len(nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)])
-        r_positive = len(r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)])
-        c_negative = len(c_df[c_df.index.isin(df_copy[df_copy['Admin_Sum'] < 0].index)])
+        nb_positive = len(nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] > 0].index)])
+        r_positive = len(r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] > 0].index)])
+        c_negative = len(c_df[c_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] < 0].index)])
         
         st.write(f"🔍 **Records meeting filtering criteria:**")
         st.write(f"  NB with Admin_Sum > 0: {nb_positive}")
