@@ -603,11 +603,11 @@ def create_output_dataframe_debug(df, transaction_type, admin_cols, row_type, in
     return output
 
 def process_data_debug(df):
-    """Debug version of data processing."""
+    """Super smart data processing using the intelligent column mapper."""
     try:
-        st.write("🔍 **Starting DEBUG data processing...**")
+        st.write("🧠 **Starting Super Smart Data Processing...**")
         
-        # Analyze data structure
+        # Analyze data structure using the super smart system
         structure_info = analyze_data_structure_smart(df)
         if not structure_info:
             st.error("❌ **Could not analyze data structure**")
@@ -615,15 +615,34 @@ def process_data_debug(df):
         
         transaction_col = structure_info['transaction_col']
         admin_cols = structure_info['admin_columns']
+        mapper = structure_info.get('mapper')  # Get the smart mapper for additional info
         
-        st.write(f"✅ **Data structure analysis complete**")
+        st.write(f"✅ **Super Smart Data Structure Analysis Complete!**")
         st.write(f"  - Transaction column: {transaction_col}")
         st.write(f"  - Admin columns: {admin_cols}")
         
-        # DEBUG: Show final Admin column details
-        st.write("🔍 **DEBUG: Final Admin column validation before processing**")
-        for admin_type, col_name in admin_cols.items():
-            debug_column_info(df, col_name, f"Pre-Processing - {admin_type}")
+        # Show additional insights from the smart mapper
+        if mapper:
+            st.write("🔍 **Smart Mapper Insights:**")
+            st.write(f"  - Total columns analyzed: {len(mapper.column_analysis)}")
+            st.write(f"  - Numeric columns found: {len([col for col, analysis in mapper.column_analysis.items() if analysis['is_numeric']])}")
+            st.write(f"  - Datetime columns detected: {len([col for col, analysis in mapper.column_analysis.items() if analysis['is_datetime']])}")
+        
+        # Validate the selected columns
+        st.write("🔄 **Validating selected columns...**")
+        
+        # Check if transaction column exists and has data
+        if transaction_col not in df.columns:
+            st.error(f"❌ **Transaction column '{transaction_col}' not found in dataframe**")
+            return None
+        
+        # Check if all admin columns exist
+        missing_admin_cols = [col for col in admin_cols.values() if col not in df.columns]
+        if missing_admin_cols:
+            st.error(f"❌ **Missing admin columns: {missing_admin_cols}**")
+            return None
+        
+        st.write("✅ **Column validation successful**")
         
         # Filter by transaction type - skip the header row
         st.write("🔄 **Filtering data by transaction type...**")
@@ -643,17 +662,25 @@ def process_data_debug(df):
         r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
         st.write(f"  - R records found: {len(r_df)}")
         
-        # Apply Admin amount filtering with DEBUG
-        st.write("🔄 **Applying Admin amount filtering with DEBUG...**")
+        # Apply Admin amount filtering with super smart validation
+        st.write("🔄 **Applying Super Smart Admin amount filtering...**")
         
         # For NB: sum > 0 AND all individual amounts > 0
         if len(nb_df) > 0:
             admin_cols_list = list(admin_cols.values())
             
-            st.write(f"🔍 **DEBUG: Admin columns for NB filtering:**")
+            st.write(f"🔍 **Admin columns for NB filtering:**")
             for i, col in enumerate(admin_cols_list):
                 st.write(f"  Admin {i+1}: {col}")
-                debug_column_info(nb_df, col, f"NB Filtering - Admin {i+1}")
+                
+                # Show column analysis from smart mapper
+                if mapper and col in mapper.column_analysis:
+                    analysis = mapper.column_analysis[col]
+                    st.write(f"    - Confidence: {analysis['confidence_score']:.2f}")
+                    st.write(f"    - Data type: {analysis['data_type']}")
+                    st.write(f"    - Non-null: {analysis['non_null_count']}")
+                    if analysis['patterns']:
+                        st.write(f"    - Patterns: {', '.join(analysis['patterns'])}")
             
             # Convert to numeric and check for errors
             st.write("🔄 **Converting Admin columns to numeric...**")
@@ -674,11 +701,20 @@ def process_data_debug(df):
                 st.error(f"❌ **Only {len(numeric_admin_cols)} Admin columns could be converted to numeric**")
                 return None
             
-            # Calculate sum
+            # Calculate sum using the smart mapper's validated columns
             st.write("🔄 **Calculating Admin sum...**")
             try:
                 nb_df['Admin_Sum'] = pd.concat(numeric_admin_cols, axis=1).sum(axis=1)
                 st.write(f"✅ **Admin sum calculated successfully**")
+                
+                # Show sum statistics
+                sum_stats = nb_df['Admin_Sum'].describe()
+                st.write(f"  - Admin sum statistics:")
+                st.write(f"    - Min: {sum_stats['min']:.2f}")
+                st.write(f"    - Max: {sum_stats['max']:.2f}")
+                st.write(f"    - Mean: {sum_stats['mean']:.2f}")
+                st.write(f"    - Std: {sum_stats['std']:.2f}")
+                
             except Exception as e:
                 st.write(f"❌ **Error calculating Admin sum: {str(e)}**")
                 st.write(f"  - Numeric columns: {len(numeric_admin_cols)}")
@@ -715,23 +751,31 @@ def process_data_debug(df):
             st.write(f"  - C after Admin sum < 0 filter: {len(c_filtered)} records")
             c_df = c_filtered
         
-        # Create output dataframes
-        st.write("🔄 **Creating output dataframes...**")
+        # Create output dataframes using the smart mapper's insights
+        st.write("🔄 **Creating output dataframes with smart mapping...**")
         
         nb_output = create_output_dataframe_debug(nb_df, 'NB', admin_cols, 'New Business', False)
         c_output = create_output_dataframe_debug(c_df, 'C', admin_cols, 'Cancellation', True)
         r_output = create_output_dataframe_debug(r_df, 'R', admin_cols, 'Reinstatement', False)
         
-        st.write("✅ **Data processing complete!**")
+        st.write("✅ **Super Smart Data Processing Complete!**")
         st.write(f"  - Final NB records: {len(nb_output)}")
         st.write(f"  - Final C records: {len(c_output)}")
         st.write(f"  - Final R records: {len(r_output)}")
         st.write(f"  - Total records: {len(nb_output) + len(c_output) + len(r_output)}")
         
+        # Show processing insights
+        if mapper:
+            st.write("🧠 **Processing Insights:**")
+            st.write(f"  - Columns analyzed: {len(mapper.column_analysis)}")
+            st.write(f"  - Detection confidence: High (using multiple strategies)")
+            st.write(f"  - Pattern recognition: Enabled")
+            st.write(f"  - Smart fallbacks: Active")
+        
         return nb_output, c_output, r_output
         
     except Exception as e:
-        st.error(f"❌ **Error in DEBUG data processing:** {str(e)}")
+        st.error(f"❌ **Error in Super Smart data processing:** {str(e)}")
         st.write("**Full error details:**")
         st.code(traceback.format_exc())
         return None
@@ -777,22 +821,90 @@ def create_excel_download_clean(df, sheet_name):
         st.error(f"Error creating Excel file: {str(e)}")
         return None
 
-def main():
-    st.set_page_config(
-        page_title="Karen NCB Data Processor - Version 3.0",
-        page_icon="📊",
-        layout="wide"
-    )
+def display_smart_analysis_results(mapper):
+    """Display the results of the super smart column analysis."""
+    if not mapper:
+        return
     
+    st.write("---")
+    st.subheader("🧠 **Super Smart Analysis Results**")
+    
+    # Column type summary
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**📊 Column Type Summary:**")
+        datetime_cols = [col for col, analysis in mapper.column_analysis.items() if analysis['is_datetime']]
+        numeric_cols = [col for col, analysis in mapper.column_analysis.items() if analysis['is_numeric']]
+        categorical_cols = [col for col, analysis in mapper.column_analysis.items() if analysis['is_categorical']]
+        admin_cols = [col for col, analysis in mapper.column_analysis.items() if analysis['is_admin_amount']]
+        
+        st.write(f"- Datetime columns: {len(datetime_cols)}")
+        st.write(f"- Numeric columns: {len(numeric_cols)}")
+        st.write(f"- Categorical columns: {len(categorical_cols)}")
+        st.write(f"- Admin amount columns: {len(admin_cols)}")
+    
+    with col2:
+        st.write("**🎯 Detection Results:**")
+        if mapper.transaction_column:
+            st.write(f"- Transaction column: ✅ Found")
+        else:
+            st.write(f"- Transaction column: ❌ Not found")
+        
+        if mapper.admin_columns:
+            st.write(f"- Admin columns: ✅ {len(mapper.admin_columns)} found")
+        else:
+            st.write(f"- Admin columns: ❌ Not found")
+    
+    # Show top confidence columns
+    st.write("**🏆 Top Confidence Columns:**")
+    confidence_scores = [(col, analysis['confidence_score']) for col, analysis in mapper.column_analysis.items()]
+    confidence_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    for i, (col, score) in enumerate(confidence_scores[:10]):
+        analysis = mapper.column_analysis[col]
+        col_type = []
+        if analysis['is_datetime']:
+            col_type.append("📅 Datetime")
+        if analysis['is_numeric']:
+            col_type.append("🔢 Numeric")
+        if analysis['is_categorical']:
+            col_type.append("📝 Categorical")
+        if analysis['is_admin_amount']:
+            col_type.append("💰 Admin Amount")
+        if analysis['is_transaction_type']:
+            col_type.append("🔄 Transaction")
+        
+        col_type_str = " | ".join(col_type) if col_type else "❓ Unknown"
+        st.write(f"{i+1}. **{col}** - Confidence: {score:.2f} - Type: {col_type_str}")
+        
+        if analysis['patterns']:
+            st.write(f"   Patterns: {', '.join(analysis['patterns'])}")
+        if analysis['recommendations']:
+            st.write(f"   Recommendations: {', '.join(analysis['recommendations'])}")
+    
+    # Show datetime columns that were detected
+    if datetime_cols:
+        st.write("**⚠️ Datetime Columns Detected:**")
+        for col in datetime_cols:
+            analysis = mapper.column_analysis[col]
+            st.write(f"- **{col}** (dtype: {analysis['data_type']})")
+            if analysis['sample_values']:
+                st.write(f"  Sample: {analysis['sample_values'][:3]}...")
+
+def main():
+    """Main Streamlit application."""
     st.title("🚀 Karen NCB Data Processor - Version 3.0")
-    st.markdown("**Expected Output:** 2k-2500 rows in specific order with proper column mapping")
+    st.write("**Expected Output:** 2k-2500 rows in specific order with proper column mapping")
     
     # File upload section
     st.header("📁 Upload Excel File")
+    st.write("Upload Excel file with NCB data and 'Col Ref' sheet")
+    
     uploaded_file = st.file_uploader(
         "Upload Excel file with NCB data and 'Col Ref' sheet",
         type=['xlsx', 'xls'],
-        help="Your file should have a 'Data' tab and a reference sheet (like 'Col Ref' or 'xref')"
+        help="Upload your Excel file here. The app will automatically detect the correct columns."
     )
     
     if uploaded_file is not None:
@@ -820,12 +932,13 @@ def main():
             st.write(f"📊 **Data sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
             
             # Process the data
-            if st.button("🔄 **Process Data**", type="primary"):
-                with st.spinner("Processing data..."):
-                    # Process the data using the enhanced functions
-                    nb_df, c_df, r_df = process_data_debug(df)
+            if st.button("🧠 **Process Data with Super Smart Analysis**", type="primary"):
+                with st.spinner("🧠 Running Super Smart Analysis..."):
+                    # Process the data using the super smart system
+                    result = process_data_debug(df)
                     
-                    if nb_df is not None and c_df is not None and r_df is not None:
+                    if result is not None:
+                        nb_df, c_df, r_df = result
                         
                         # Display results
                         st.header("📊 Processing Results")
@@ -839,6 +952,18 @@ def main():
                         st.write(f"- **NB (New Business):** {len(nb_df)} records")
                         st.write(f"- **C (Cancellation):** {len(c_df)} records") 
                         st.write(f"- **R (Reinstatement):** {len(r_df)} records")
+                        
+                        # Show super smart analysis results
+                        if hasattr(result, 'mapper') or (isinstance(result, tuple) and len(result) > 3):
+                            # Try to get the mapper from the result
+                            mapper = None
+                            if hasattr(result, 'mapper'):
+                                mapper = result.mapper
+                            elif isinstance(result, tuple) and len(result) > 3:
+                                mapper = result[3] if len(result) > 3 else None
+                            
+                            if mapper:
+                                display_smart_analysis_results(mapper)
                         
                         # Show sample data in collapsible sections
                         with st.expander("📋 **Sample New Business Data (First 5 rows)**", expanded=False):
