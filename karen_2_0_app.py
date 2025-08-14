@@ -41,6 +41,12 @@ def process_excel_data_karen_2_0(uploaded_file):
                 df = df.iloc[13:].reset_index(drop=True)
                 st.write(f"📏 Data shape after header fix: {df.shape}")
                 
+                # Clean up any duplicate column names in the original data
+                df = clean_duplicate_columns(df)
+                
+                # Clean up any empty/None/NaN column names
+                df = clean_empty_column_names(df)
+                
                 # Show first few column names to understand structure
                 st.write(f"🔍 **First 20 columns:** {list(df.columns[:20])}")
                 
@@ -592,12 +598,21 @@ def check_data_structure(df, ncb_columns, required_cols):
     transaction_col = required_cols.get('M')
     if transaction_col and transaction_col in df.columns:
         st.write("🔍 **Transaction Type Analysis:**")
-        unique_transactions = df[transaction_col].astype(str).unique()
+        
+        # Ensure we're working with a Series, not a DataFrame
+        if isinstance(df[transaction_col], pd.DataFrame):
+            # If it's a DataFrame, select the first column
+            transaction_series = df[transaction_col].iloc[:, 0]
+        else:
+            # If it's already a Series, use it directly
+            transaction_series = df[transaction_col]
+        
+        unique_transactions = transaction_series.astype(str).unique()
         st.write(f"  Unique values: {unique_transactions}")
         
         # Count each transaction type
         for trans_type in ['NB', 'C', 'R']:
-            count = df[transaction_col].astype(str).str.upper().isin([trans_type]).sum()
+            count = transaction_series.astype(str).str.upper().isin([trans_type]).sum()
             st.write(f"  {trans_type}: {count}")
     
     # Check NCB sum calculation
@@ -618,6 +633,77 @@ def check_data_structure(df, ncb_columns, required_cols):
         'missing_ncb': [col for col in ncb_columns.values() if col not in df.columns],
         'missing_required': [col for col in required_cols.values() if col not in df.columns]
     }
+
+def clean_duplicate_columns(df):
+    """Clean up duplicate column names in the original DataFrame."""
+    if df is None or df.empty:
+        return df
+    
+    # Check for duplicate column names
+    duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+    if not duplicate_cols:
+        return df
+    
+    st.warning(f"⚠️ **Found duplicate columns in original data: {duplicate_cols}**")
+    st.write("🔧 **Cleaning duplicate columns...**")
+    
+    # Create new column names with suffixes for duplicates
+    new_columns = []
+    seen_columns = {}
+    
+    for col in df.columns:
+        if col in seen_columns:
+            seen_columns[col] += 1
+            new_col = f"{col}_{seen_columns[col]}"
+        else:
+            seen_columns[col] = 0
+            new_col = col
+        
+        new_columns.append(new_col)
+    
+    # Create new DataFrame with cleaned column names
+    cleaned_df = df.copy()
+    cleaned_df.columns = new_columns
+    
+    st.write(f"✅ **Cleaned DataFrame shape: {cleaned_df.shape}**")
+    st.write(f"✅ **Duplicate columns resolved**")
+    
+    return cleaned_df
+
+def clean_empty_column_names(df):
+    """Clean up empty, None, or NaN column names."""
+    if df is None or df.empty:
+        return df
+    
+    # Check for empty/None/NaN column names
+    empty_cols = [col for col in df.columns if col is None or str(col).strip() == '' or str(col) == 'nan']
+    if not empty_cols:
+        return df
+    
+    st.warning(f"⚠️ **Found empty/None column names: {empty_cols}**")
+    st.write("🔧 **Cleaning empty column names...**")
+    
+    # Create new column names, replacing empty ones with descriptive names
+    new_columns = []
+    empty_count = 0
+    
+    for col in df.columns:
+        if col is None or str(col).strip() == '' or str(col) == 'nan':
+            new_col = f"Unnamed_Column_{empty_count}"
+            empty_count += 1
+        else:
+            new_col = col
+        
+        new_columns.append(new_col)
+    
+    # Create new DataFrame with cleaned column names
+    cleaned_df = df.copy()
+    cleaned_df.columns = new_columns
+    
+    st.write(f"✅ **Cleaned DataFrame shape: {cleaned_df.shape}**")
+    st.write(f"✅ **Empty column names resolved**")
+    
+    return cleaned_df
 
 def main():
     st.title("📊 Karen 2.0 NCB Data Processor")
