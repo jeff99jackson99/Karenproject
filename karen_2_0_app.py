@@ -284,20 +284,42 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             sample_r = transaction_series[r_mask].astype(str).unique()[:5]
             st.write(f"🔍 **Sample R transactions:** {sample_r}")
         
+        # Create filtered dataframes
+        nb_df = df[nb_mask].copy()
+        c_df = df[c_mask].copy()
+        r_df = df[r_mask].copy()
+        
+        st.write(f"📊 **Filtered dataframe sizes:**")
+        st.write(f"  NB DataFrame: {nb_df.shape}")
+        st.write(f"  C DataFrame: {c_df.shape}")
+        st.write(f"  R DataFrame: {r_df.shape}")
+        
+        # Calculate NCB sum for each transaction type
+        ncb_cols = list(ncb_columns.values())
+        
+        if len(nb_df) > 0:
+            nb_df['NCB_Sum'] = nb_df[ncb_cols].apply(pd.to_numeric, errors='coerce').sum(axis=1)
+            st.write(f"🔍 **NB NCB sums sample:** {nb_df['NCB_Sum'].head().tolist()}")
+        
+        if len(c_df) > 0:
+            c_df['NCB_Sum'] = c_df[ncb_cols].apply(pd.to_numeric, errors='coerce').sum(axis=1)
+            st.write(f"🔍 **C NCB sums sample:** {c_df['NCB_Sum'].head().tolist()}")
+        
+        if len(r_df) > 0:
+            r_df['NCB_Sum'] = r_df[ncb_cols].apply(pd.to_numeric, errors='coerce').sum(axis=1)
+            st.write(f"🔍 **R NCB sums sample:** {r_df['NCB_Sum'].head().tolist()}")
+        
         # Apply Karen 2.0 filtering rules
         # Data Set 1 (NB): sum > 0
-        nb_df = df[nb_mask].copy()
         nb_filtered = nb_df[nb_df['NCB_Sum'] > 0]
         
         # Data Set 2 (R): sum > 0
-        r_df = df[r_mask].copy()
         r_filtered = r_df[r_df['NCB_Sum'] > 0]
         
         # Data Set 3 (C): sum < 0
-        c_df = df[c_mask].copy()
         c_filtered = c_df[c_df['NCB_Sum'] < 0]
         
-        st.write(f"📊 **Filtered results (Karen 2.0 rules):**")
+        st.write(f"📊 **Final filtered results (Karen 2.0 rules):**")
         st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
         st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
         st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
@@ -441,7 +463,9 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'nb_data': nb_output,
             'reinstatement_data': r_output,
             'cancellation_data': c_output,
-            'validation_results': validation_results
+            'validation_results': validation_results,
+            'ncb_columns': ncb_columns,
+            'total_records': len(nb_output) + len(r_output) + len(c_output)
         }
         
     except Exception as e:
