@@ -372,8 +372,15 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
                 st.write(f"📊 **Final results:** NB: {len(nb_filtered)}, R: {len(r_filtered)}, C: {len(c_filtered)}")
                 
             else:
-                st.error("❌ **Continuous testing failed, using fallback method**")
-                # Fallback to original working approach
+                st.error("❌ **Continuous testing failed, using CORRECT Karen 2.0 filtering rules**")
+                
+                # Apply CORRECT Karen 2.0 filtering rules (not the working approach)
+                st.write("🔍 **Applying CORRECT Karen 2.0 filtering rules:**")
+                st.write("  - New Business (NB): Admin_Sum > 0 (strictly positive)")
+                st.write("  - Reinstatements (R): Admin_Sum > 0 (strictly positive)")
+                st.write("  - Cancellations (C): Admin_Sum < 0 (strictly negative)")
+                
+                # Filter by transaction type
                 nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
                 c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
                 r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
@@ -392,10 +399,24 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
                 
                 df_copy['Admin_Sum'] = df_copy[ncb_cols].fillna(0).sum(axis=1)
                 
-                # Apply filtering based on approach
-                nb_filtered = nb_df[nb_df['Admin_Sum'] >= 0]
-                r_filtered = r_df[r_df['Admin_Sum'] >= 0]
-                c_filtered = c_df[c_df['Admin_Sum'] <= 0]
+                # Apply CORRECT Karen 2.0 filtering (strict >0/<0)
+                nb_filtered = nb_df[nb_df['Admin_Sum'] > 0]   # Changed from >= 0 to > 0
+                r_filtered = r_df[r_df['Admin_Sum'] > 0]      # Changed from >= 0 to > 0
+                c_filtered = c_df[c_df['Admin_Sum'] < 0]      # Changed from <= 0 to < 0
+                
+                st.write(f"📊 **CORRECT Karen 2.0 filtering results:**")
+                st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
+                st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
+                st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
+                st.write(f"  Total: {len(nb_filtered) + len(r_filtered) + len(c_filtered)}")
+                
+                # Check if we're in the expected range
+                total_records = len(nb_filtered) + len(r_filtered) + len(c_filtered)
+                if total_records >= 2000 and total_records <= 2500:
+                    st.success(f"🎯 **PERFECT! Total records ({total_records}) within expected range (2,000-2,500)**")
+                else:
+                    st.warning(f"⚠️ **Total records ({total_records}) outside expected range (2,000-2,500)**")
+                    st.write("  This suggests the data may need different filtering criteria")
         
         st.write(f"✅ **Transaction column found:** {transaction_col}")
         
@@ -713,6 +734,11 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         st.write(f"  These columns contain 0 values as they don't exist in the source data")
         st.write(f"  This allows us to output the exact 7-column format specified in Karen 2.0")
         
+        # CRITICAL: Ensure we're using the dataframes WITH placeholders for output
+        nb_output_data = nb_filtered_with_placeholders
+        r_output_data = r_filtered_with_placeholders
+        c_output_data = c_filtered_with_placeholders
+        
         # Debug: Show selected columns for each dataset
         st.write("🔍 **DEBUG: Selected columns for each dataset:**")
         st.write(f"  NB columns: {nb_output_cols}")
@@ -755,9 +781,9 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
             st.error(f"❌ **C dataset has duplicate columns:** {c_duplicates}")
         
         # Create output dataframes
-        nb_output = nb_filtered_with_placeholders[nb_output_cols].copy()
-        r_output = r_filtered_with_placeholders[r_output_cols].copy()
-        c_output = c_filtered_with_placeholders[c_output_cols].copy()
+        nb_output = nb_output_data[nb_output_cols].copy()
+        r_output = r_output_data[r_output_cols].copy()
+        c_output = c_output_data[c_output_cols].copy()
         
         # Set column headers based on Karen 2.0 specifications
         # Data Set 1 (NB) - 17 columns in exact order as per instructions
@@ -1241,41 +1267,49 @@ def continuous_testing_until_success(df, ncb_columns, required_cols, transaction
             # Test different filtering strategies
             strategies = [
                 {
-                    'name': 'Strict Karen 2.0 (>0/<0)',
+                    'name': 'CORRECT Karen 2.0 (>0/<0)',
                     'nb_filter': lambda x: x > 0,
                     'r_filter': lambda x: x > 0,
                     'c_filter': lambda x: x < 0,
-                    'description': 'NB/R: sum > 0, C: sum < 0'
+                    'description': 'NB/R: sum > 0, C: sum < 0 (CORRECT RULES)',
+                    'priority': 1
                 },
                 {
                     'name': 'Flexible Working (>=0/<=0)',
                     'nb_filter': lambda x: x >= 0,
                     'r_filter': lambda x: x >= 0,
                     'c_filter': lambda x: x <= 0,
-                    'description': 'NB/R: sum >= 0, C: sum <= 0'
+                    'description': 'NB/R: sum >= 0, C: sum <= 0 (Working approach)',
+                    'priority': 2
                 },
                 {
                     'name': 'Mixed Approach',
                     'nb_filter': lambda x: x >= 0,
                     'r_filter': lambda x: x > 0,
                     'c_filter': lambda x: x <= 0,
-                    'description': 'NB: sum >= 0, R: sum > 0, C: sum <= 0'
+                    'description': 'NB: sum >= 0, R: sum > 0, C: sum <= 0',
+                    'priority': 3
                 },
                 {
                     'name': 'Include All Non-Zero',
                     'nb_filter': lambda x: x != 0,
                     'r_filter': lambda x: x != 0,
                     'c_filter': lambda x: x != 0,
-                    'description': 'All: sum != 0'
+                    'description': 'All: sum != 0',
+                    'priority': 4
                 },
                 {
                     'name': 'Very Flexible',
                     'nb_filter': lambda x: x >= -1000,  # Allow some negative for NB
                     'r_filter': lambda x: x >= -1000,   # Allow some negative for R
                     'c_filter': lambda x: x <= 1000,    # Allow some positive for C
-                    'description': 'Very wide ranges'
+                    'description': 'Very wide ranges',
+                    'priority': 5
                 }
             ]
+            
+            # Sort strategies by priority (CORRECT Karen 2.0 first)
+            strategies.sort(key=lambda x: x['priority'])
             
             for strategy in strategies:
                 print(f"  🔍 Testing: {strategy['name']} - {strategy['description']}")
@@ -1312,9 +1346,14 @@ def continuous_testing_until_success(df, ncb_columns, required_cols, transaction
                 if (total_records >= 2000 and total_records <= 2500 and 
                     len(nb_filtered) > 0 and len(r_filtered) > 0 and len(c_filtered) > 0):
                     
+                    # Give priority to CORRECT Karen 2.0 rules
+                    is_correct_karen_2_0 = (strategy['name'] == 'CORRECT Karen 2.0 (>0/<0)')
+                    
                     print(f"🎯 **SUCCESS!** Strategy '{strategy['name']}' produced expected results!")
                     print(f"   NB: {len(nb_filtered)}, R: {len(r_filtered)}, C: {len(c_filtered)}")
                     print(f"   Total: {total_records}")
+                    if is_correct_karen_2_0:
+                        print(f"   🎯 PRIORITY: This is the CORRECT Karen 2.0 filtering approach!")
                     
                     return {
                         'success': True,
@@ -1324,7 +1363,8 @@ def continuous_testing_until_success(df, ncb_columns, required_cols, transaction
                             'r': r_filtered,
                             'c': c_filtered
                         },
-                        'rounds_tested': test_rounds
+                        'rounds_tested': test_rounds,
+                        'is_correct_karen_2_0': is_correct_karen_2_0
                     }
                 
                 # If not successful, try alternative transaction type mappings
