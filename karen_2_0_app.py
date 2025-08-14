@@ -310,19 +310,38 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             st.write(f"🔍 **R NCB sums sample:** {r_df['NCB_Sum'].head().tolist()}")
         
         # Apply Karen 2.0 filtering rules
-        # Data Set 1 (NB): sum > 0
-        nb_filtered = nb_df[nb_df['NCB_Sum'] > 0]
+        # Data Set 1 (NB): sum >= 0 (include 0 values)
+        nb_filtered = nb_df[nb_df['NCB_Sum'] >= 0]
         
-        # Data Set 2 (R): sum > 0
-        r_filtered = r_df[r_df['NCB_Sum'] > 0]
+        # Data Set 2 (R): sum >= 0 (include 0 values)
+        r_filtered = r_df[r_df['NCB_Sum'] >= 0]
         
-        # Data Set 3 (C): sum < 0
-        c_filtered = c_df[c_df['NCB_Sum'] < 0]
+        # Data Set 3 (C): sum <= 0 (include 0 values)
+        c_filtered = c_df[c_df['NCB_Sum'] <= 0]
         
         st.write(f"📊 **Final filtered results (Karen 2.0 rules):**")
-        st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
-        st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
-        st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
+        st.write(f"  New Business (sum >= 0): {len(nb_filtered)}")
+        st.write(f"  Reinstatements (sum >= 0): {len(r_filtered)}")
+        st.write(f"  Cancellations (sum <= 0): {len(c_filtered)}")
+        
+        # Show distribution of NCB sums for debugging
+        if len(nb_df) > 0:
+            st.write(f"🔍 **NB NCB sum distribution:**")
+            st.write(f"  Sum > 0: {(nb_df['NCB_Sum'] > 0).sum()}")
+            st.write(f"  Sum = 0: {(nb_df['NCB_Sum'] == 0).sum()}")
+            st.write(f"  Sum < 0: {(nb_df['NCB_Sum'] < 0).sum()}")
+        
+        if len(c_df) > 0:
+            st.write(f"🔍 **C NCB sum distribution:**")
+            st.write(f"  Sum > 0: {(c_df['NCB_Sum'] > 0).sum()}")
+            st.write(f"  Sum = 0: {(c_df['NCB_Sum'] == 0).sum()}")
+            st.write(f"  Sum < 0: {(c_df['NCB_Sum'] < 0).sum()}")
+        
+        if len(r_df) > 0:
+            st.write(f"🔍 **R NCB sum distribution:**")
+            st.write(f"  Sum > 0: {(r_df['NCB_Sum'] > 0).sum()}")
+            st.write(f"  Sum = 0: {(r_df['NCB_Sum'] == 0).sum()}")
+            st.write(f"  Sum < 0: {(r_df['NCB_Sum'] < 0).sum()}")
         
         # Create output dataframes with required columns in correct order
         # Data Set 1: New Business (NB) - 17 columns in exact order
