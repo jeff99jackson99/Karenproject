@@ -23,7 +23,7 @@ def analyze_data_structure_clean(df):
         try:
             # Get sample data and check for transaction types
             # Skip the first row (header) and look at actual data
-            sample_data = df[col].dropna().iloc[1:].head(100)  # Skip header row
+            sample_data = df[col].dropna().iloc[1:].head(500)  # Look at more rows
             if len(sample_data) > 0:
                 # Convert to string and check for NB, C, R
                 str_vals = [str(val).upper().strip() for val in sample_data]
@@ -31,11 +31,17 @@ def analyze_data_structure_clean(df):
                 c_count = str_vals.count('C')
                 r_count = str_vals.count('R')
                 
-                if nb_count > 0 and c_count > 0 and r_count > 0:
+                # Check if this looks like a transaction type column
+                if (nb_count > 0 or c_count > 0 or r_count > 0) and (nb_count + c_count + r_count) > len(sample_data) * 0.1:
                     transaction_col = col
                     st.write(f"✅ **Found Transaction Type column:** {col}")
                     st.write(f"   Sample counts: NB={nb_count}, C={c_count}, R={r_count}")
-                    st.write(f"   Sample values: {list(set(str_vals))[:10]}")
+                    st.write(f"   Total transaction records: {nb_count + c_count + r_count} out of {len(sample_data)}")
+                    
+                    # Show unique values found
+                    unique_vals = list(set(str_vals))
+                    transaction_vals = [v for v in unique_vals if v in ['NB', 'C', 'R']]
+                    st.write(f"   Transaction types found: {transaction_vals}")
                     break
         except Exception as e:
             continue
@@ -47,7 +53,7 @@ def analyze_data_structure_clean(df):
             try:
                 # Show both header and sample data
                 header_val = df[col].iloc[0] if len(df) > 0 else 'No data'
-                sample_vals = df[col].dropna().iloc[1:].head(3).tolist()
+                sample_vals = df[col].dropna().iloc[1:].head(5).tolist()
                 st.write(f"  Column {i}: {col} → Header: '{header_val}' → Sample: {sample_vals}")
             except:
                 st.write(f"  Column {i}: {col} → Error reading data")
