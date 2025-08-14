@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Karen NCB Data Processor - Version 3.0
-Super Smart Data Mapping System implementing Karen 2.0 Instructions
+Restored working logic with Karen 2.0 instruction integration
 """
 
 import streamlit as st
@@ -15,7 +15,7 @@ import re
 st.set_page_config(page_title="Karen NCB v3.0", page_icon="🚀", layout="wide")
 
 class KarenNCBProcessor:
-    """Super intelligent NCB processor implementing exact Karen 2.0 instructions."""
+    """NCB processor implementing exact Karen 2.0 instructions with working logic."""
     
     def __init__(self, df):
         self.df = df
@@ -25,179 +25,51 @@ class KarenNCBProcessor:
         self.column_mapping = {}
         
     def find_transaction_column_smart(self):
-        """Find the transaction column using INSANELY SMART strategies with HUMAN INTELLIGENCE validation."""
-        st.write("🔍 **Finding Transaction Type Column (INSANELY SMART Method with HUMAN VALIDATION)...**")
+        """Find the transaction column using the working logic from the first version."""
+        st.write("🔍 **Finding Transaction Type Column (Working Logic Method)...**")
         
-        # Strategy 1: Look for columns with transaction codes in the first 200 rows
+        # Use the working logic: look for columns with clear NB, C, R patterns
         best_candidate = None
         best_score = 0
-        
-        # INSANELY SMART: Multiple transaction code patterns
-        transaction_patterns = {
-            'NB': ['NB', 'NEW BUSINESS', 'NEW', 'N', 'NEWB', 'NEW_BUSINESS', 'NEWBUSINESS', 'NEW BUSINESS', 'NEWBUS', 'NEW_BUS'],
-            'C': ['C', 'CANCEL', 'CANCELLATION', 'CANC', 'CXL', 'CANCELED', 'CANCELLED', 'CANCELATION', 'CANCELATION'],
-            'R': ['R', 'REINSTATE', 'REINSTATEMENT', 'REINST', 'REIN', 'REINSTAT', 'REINSTATE', 'REINSTATEMENT']
-        }
-        
-        # INSANELY SMART: Also look for numeric codes that might represent transaction types
-        numeric_patterns = {
-            'NB': [1, 10, 100, 1000],  # Common numeric codes for New Business
-            'C': [2, 20, 200, 2000],   # Common numeric codes for Cancellation
-            'R': [3, 30, 300, 3000]    # Common numeric codes for Reinstatement
-        }
-        
-        candidates = []
         
         for col in self.df.columns:
             try:
                 # Skip the header row and look at actual data
-                sample_data = self.df[col].iloc[1:].dropna().head(500)  # Increased sample size
+                sample_data = self.df[col].iloc[1:].dropna().head(500)
                 if len(sample_data) > 0:
                     str_vals = sample_data.astype(str).str.upper().str.strip()
                     
-                    # INSANELY SMART: Count ALL possible transaction code variations
-                    nb_count = 0
-                    c_count = 0
-                    r_count = 0
-                    
-                    # Text pattern matching
-                    for pattern_list, count_var in [
-                        (transaction_patterns['NB'], 'nb_count'),
-                        (transaction_patterns['C'], 'c_count'),
-                        (transaction_patterns['R'], 'r_count')
-                    ]:
-                        for pattern in pattern_list:
-                            if count_var == 'nb_count':
-                                nb_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
-                            elif count_var == 'c_count':
-                                c_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
-                            elif count_var == 'r_count':
-                                r_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
-                    
-                    # INSANELY SMART: Numeric pattern matching
-                    try:
-                        numeric_vals = pd.to_numeric(sample_data, errors='coerce')
-                        if not numeric_vals.isna().all():
-                            for pattern_list, count_var in [
-                                (numeric_patterns['NB'], 'nb_count'),
-                                (numeric_patterns['C'], 'c_count'),
-                                (numeric_patterns['R'], 'r_count')
-                            ]:
-                                for pattern in pattern_list:
-                                    if count_var == 'nb_count':
-                                        nb_count += (numeric_vals == pattern).sum()
-                                    elif count_var == 'c_count':
-                                        c_count += (numeric_vals == pattern).sum()
-                                    elif count_var == 'r_count':
-                                        r_count += (numeric_vals == pattern).sum()
-                    except:
-                        pass
+                    # Count transaction codes using the working pattern
+                    nb_count = str_vals.str.contains('NB', na=False).sum()
+                    c_count = str_vals.str.contains('C', na=False).sum()
+                    r_count = str_vals.str.contains('R', na=False).sum()
                     
                     total_transactions = nb_count + c_count + r_count
                     if total_transactions > 10:  # Need significant number
-                        # INSANELY SMART: Calculate score based on distribution and total count
-                        score = total_transactions + (min(nb_count, c_count, r_count) * 3)  # Bonus for balanced distribution
+                        # Calculate score based on distribution and total count
+                        score = total_transactions + (min(nb_count, c_count, r_count) * 2)
                         
-                        candidates.append({
-                            'column': col,
-                            'score': score,
-                            'nb_count': nb_count,
-                            'c_count': c_count,
-                            'r_count': r_count,
-                            'total': total_transactions
-                        })
-                        
+                        if score > best_score:
+                            best_score = score
+                            best_candidate = col
+                            
                         st.write(f"  Column {col}: NB={nb_count}, C={c_count}, R={r_count} (score: {score})")
                         
             except Exception as e:
                 continue
         
-        # HUMAN INTELLIGENCE: Validate the best candidate to ensure it's actually a transaction column
-        if candidates:
-            # Sort by score
-            candidates.sort(key=lambda x: x['score'], reverse=True)
-            best_candidate = candidates[0]['column']
-            best_score = candidates[0]['score']
-            
+        if best_candidate:
+            self.transaction_column = best_candidate
             st.write(f"✅ **Selected Transaction Column:** {best_candidate} (score: {best_score})")
             
-            # HUMAN INTELLIGENCE: Validate this is actually a transaction column, not something else
-            st.write("🔍 **HUMAN VALIDATION: Ensuring this is actually a transaction column...**")
-            
-            # Get sample data from the selected column
-            sample_data = self.df[best_candidate].iloc[1:].dropna().head(100)
+            # Show the actual transaction distribution
+            sample_data = self.df[best_candidate].iloc[1:].dropna().head(500)
             str_vals = sample_data.astype(str).str.upper().str.strip()
-            unique_vals = str_vals.value_counts().head(10)
-            
-            st.write(f"  📊 **Sample values from '{best_candidate}':**")
-            for val, count in unique_vals.items():
-                st.write(f"    '{val}': {count} records")
-            
-            # HUMAN INTELLIGENCE: Check if this looks like a transaction column or something else
-            transaction_like = False
-            for val, count in unique_vals.items():
-                val_str = str(val).upper().strip()
-                
-                # Check if it contains obvious transaction codes
-                if any(pattern in val_str for pattern in ['NB', 'C', 'R', 'NEW', 'CANCEL', 'REINSTATE']):
-                    transaction_like = True
-                    break
-                
-                # Check if it's a short code (typical for transaction types)
-                if len(val_str) <= 3 and count > 20:
-                    transaction_like = True
-                    break
-            
-            if not transaction_like:
-                st.write("🚨 **HUMAN INTELLIGENCE: This doesn't look like a transaction column!**")
-                st.write("🔍 **Looking for a better candidate...**")
-                
-                # Find a column that actually looks like transaction codes
-                for candidate in candidates[1:]:  # Skip the first one
-                    col = candidate['column']
-                    sample_data = self.df[col].iloc[1:].dropna().head(100)
-                    str_vals = sample_data.astype(str).str.upper().str.strip()
-                    unique_vals = str_vals.value_counts().head(5)
-                    
-                    # Check if this looks more like transaction codes
-                    for val, count in unique_vals.items():
-                        val_str = str(val).upper().strip()
-                        if any(pattern in val_str for pattern in ['NB', 'C', 'R', 'NEW', 'CANCEL', 'REINSTATE']) or (len(val_str) <= 3 and count > 20):
-                            st.write(f"  ✅ **Found better candidate: {col} with values like '{val}'**")
-                            best_candidate = col
-                            best_score = candidate['score']
-                            break
-                    if best_candidate != candidates[0]['column']:
-                        break
-            
-            # Show the actual transaction distribution with INSANELY SMART detection
-            sample_data = self.df[best_candidate].iloc[1:].dropna().head(1000)  # Increased sample size
-            str_vals = sample_data.astype(str).str.upper().str.strip()
-            
-            # INSANELY SMART: Count ALL patterns
-            nb_count = 0
-            c_count = 0
-            r_count = 0
-            
-            for pattern_list, count_var in [
-                (transaction_patterns['NB'], 'nb_count'),
-                (transaction_patterns['C'], 'c_count'),
-                (transaction_patterns['R'], 'r_count')
-            ]:
-                for pattern in pattern_list:
-                    if count_var == 'nb_count':
-                        nb_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
-                    elif count_var == 'c_count':
-                        c_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
-                    elif count_var == 'r_count':
-                        r_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+            nb_count = str_vals.str.contains('NB', na=False).sum()
+            c_count = str_vals.str.contains('C', na=False).sum()
+            r_count = str_vals.str.contains('R', na=False).sum()
             
             st.write(f"  Final counts: NB={nb_count}, C={c_count}, R={r_count}")
-            
-            # INSANELY SMART: Show sample values for debugging
-            unique_vals = str_vals.value_counts().head(20)
-            st.write(f"  Sample unique values: {unique_vals.to_dict()}")
-            
             return best_candidate
         else:
             st.error("❌ **Could not find Transaction Type column**")
@@ -258,100 +130,13 @@ class KarenNCBProcessor:
         return result - 1  # Convert to 0-based index
     
     def find_admin_columns_by_content(self):
-        """Find Admin columns by looking for NCB-related content patterns with HUMAN INTELLIGENCE validation."""
-        st.write("🔍 **Finding Admin Columns by NCB Content (Karen 2.0 Method with HUMAN VALIDATION)...**")
+        """Find Admin columns using the working logic from the first version."""
+        st.write("🔍 **Finding Admin Columns (Working Logic Method)...**")
         
-        # NCB-related labels from Karen 2.0 instructions
-        ncb_labels = [
-            'Agent NCB', 'Agent NCB Fee', 'Dealer NCB', 'Dealer NCB Fee',
-            'Agent NCB Offset', 'Agent NCB Offset Bucket', 
-            'Dealer NCB Offset', 'Dealer NCB Offset Bucket'
-        ]
-        
+        # Use the working logic: look for numeric columns with financial data
         admin_candidates = []
         
-        # Look for columns containing NCB-related labels
         for col in self.df.columns:
-            try:
-                # Check column header
-                col_str = str(col).upper()
-                if any(label.upper() in col_str for label in ncb_labels):
-                    admin_candidates.append({
-                        'column': col,
-                        'type': 'header_match',
-                        'confidence': 0.8
-                    })
-                    st.write(f"  ✅ Header match: {col}")
-                    continue
-                
-                # Check column content for NCB labels
-                sample_data = self.df[col].iloc[1:].dropna().head(100)
-                if len(sample_data) > 0:
-                    str_vals = sample_data.astype(str).str.upper().str.strip()
-                    
-                    # Count NCB-related labels
-                    ncb_count = sum(str_vals.str.contains(label.upper(), na=False).sum() for label in ncb_labels)
-                    
-                    if ncb_count > 5:  # Need significant number of NCB labels
-                        admin_candidates.append({
-                            'column': col,
-                            'type': 'content_match',
-                            'confidence': 0.6,
-                            'ncb_count': ncb_count
-                        })
-                        st.write(f"  ✅ Content match: {col} (NCB labels: {ncb_count})")
-                        
-            except Exception as e:
-                continue
-        
-        # HUMAN INTELLIGENCE: Look for numeric columns that might be Admin amounts with ACTUAL VALUES
-        st.write("🔍 **HUMAN INTELLIGENCE: Looking for Admin columns with actual financial values...**")
-        
-        for col in self.df.columns:
-            if col not in [c['column'] for c in admin_candidates]:
-                try:
-                    col_data = self.df[col].iloc[1:]
-                    numeric_data = pd.to_numeric(col_data, errors='coerce')
-                    
-                    if not numeric_data.isna().all():
-                        non_zero_count = (numeric_data != 0).sum()
-                        total_count = numeric_data.notna().sum()
-                        
-                        # HUMAN INTELLIGENCE: Prioritize columns with actual non-zero values
-                        if non_zero_count > 50 and total_count > 100:  # Need significant non-zero data
-                            # Calculate financial characteristics
-                            min_val = numeric_data.min()
-                            max_val = numeric_data.max()
-                            mean_val = numeric_data.mean()
-                            
-                            # Check if this looks like financial data (not just zeros)
-                            if abs(max_val) > 100 or abs(min_val) > 100:  # Significant amounts
-                                admin_candidates.append({
-                                    'column': col,
-                                    'type': 'numeric_financial',
-                                    'confidence': 0.7,
-                                    'non_zero_count': non_zero_count,
-                                    'total_count': total_count,
-                                    'min_val': min_val,
-                                    'max_val': max_val,
-                                    'mean_val': mean_val
-                                })
-                                
-                                st.write(f"  ✅ Financial data: {col}")
-                                st.write(f"    - Non-zero: {non_zero_count}/{total_count}")
-                                st.write(f"    - Range: {min_val:.2f} to {max_val:.2f}")
-                                st.write(f"    - Mean: {mean_val:.2f}")
-                            
-                except:
-                    continue
-        
-        # HUMAN INTELLIGENCE: Sort candidates by confidence and financial value quality
-        admin_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-        
-        # HUMAN INTELLIGENCE: Filter out candidates with all zeros or no financial value
-        quality_candidates = []
-        for candidate in admin_candidates:
-            col = candidate['column']
             try:
                 col_data = self.df[col].iloc[1:]
                 numeric_data = pd.to_numeric(col_data, errors='coerce')
@@ -360,15 +145,34 @@ class KarenNCBProcessor:
                     non_zero_count = (numeric_data != 0).sum()
                     total_count = numeric_data.notna().sum()
                     
-                    # Only include columns with actual financial values
-                    if non_zero_count > 20 and total_count > 50:
-                        quality_candidates.append(candidate)
-                        st.write(f"  ✅ Quality validated: {col} (non-zero: {non_zero_count}/{total_count})")
-                    else:
-                        st.write(f"  ❌ Rejected (all zeros): {col} (non-zero: {non_zero_count}/{total_count})")
+                    # Use the working criteria: need significant non-zero data
+                    if non_zero_count > 10 and total_count > 50:
+                        # Calculate financial characteristics
+                        min_val = numeric_data.min()
+                        max_val = numeric_data.max()
+                        mean_val = numeric_data.mean()
                         
+                        admin_candidates.append({
+                            'column': col,
+                            'type': 'numeric_financial',
+                            'confidence': 0.7,
+                            'non_zero_count': non_zero_count,
+                            'total_count': total_count,
+                            'min_val': min_val,
+                            'max_val': max_val,
+                            'mean_val': mean_val
+                        })
+                        
+                        st.write(f"  ✅ Financial data: {col}")
+                        st.write(f"    - Non-zero: {non_zero_count}/{total_count}")
+                        st.write(f"    - Range: {min_val:.2f} to {max_val:.2f}")
+                        st.write(f"    - Mean: {mean_val:.2f}")
+                            
             except:
                 continue
+        
+        # Sort by confidence and select the best 7 Admin columns
+        admin_candidates.sort(key=lambda x: x['confidence'], reverse=True)
         
         # Map to Admin column names from Karen 2.0
         admin_names = ['Admin_3_Amount_Agent_NCB_Fee', 'Admin_4_Amount_Dealer_NCB_Fee', 
@@ -377,191 +181,64 @@ class KarenNCBProcessor:
                       'Admin_10_Amount_Dealer_NCB_Offset_Bucket']
         
         self.admin_columns = {}
-        for i, candidate in enumerate(quality_candidates[:len(admin_names)]):
+        for i, candidate in enumerate(admin_candidates[:len(admin_names)]):
             admin_name = admin_names[i]
             self.admin_columns[admin_name] = candidate['column']
             st.write(f"  ✅ {admin_name}: {candidate['column']} (confidence: {candidate['confidence']})")
         
-        st.write(f"✅ **Found {len(self.admin_columns)} quality Admin columns with actual financial values**")
+        st.write(f"✅ **Found {len(self.admin_columns)} Admin columns**")
         return self.admin_columns
     
     def process_data_karen_2_0(self):
-        """Process data according to exact Karen 2.0 instructions with human-like error correction."""
-        st.write("🔄 **Processing Data (Karen 2.0 Method with Human Intelligence)...**")
+        """Process data according to exact Karen 2.0 instructions using working logic."""
+        st.write("🔄 **Processing Data (Karen 2.0 Method with Working Logic)...**")
         
-        # Step 1: Find transaction column
+        # Step 1: Find transaction column using working logic
         if not self.find_transaction_column_smart():
             return None
         
         # Step 2: Map columns by Excel position
         self.map_columns_by_excel_position()
         
-        # Step 3: Find Admin columns
+        # Step 3: Find Admin columns using working logic
         self.find_admin_columns_by_content()
         
-        # Step 4: Filter data by transaction type and apply Karen 2.0 logic
-        st.write("🔄 **Applying Karen 2.0 Filtering Logic (Human Intelligence Mode)...**")
+        # Step 4: Filter data by transaction type using working logic
+        st.write("🔄 **Applying Working Logic Transaction Filtering...**")
         
-        # HUMAN INTELLIGENCE: Show what we actually found in the data
-        st.write("🔍 **HUMAN ANALYSIS: What's actually in the transaction column?**")
+        # Get the actual data (skip header)
+        data_df = self.df.iloc[1:].copy()
         
-        # Get sample data from the transaction column
-        sample_data = self.df[self.transaction_column].iloc[1:].dropna().head(100)
-        str_vals = sample_data.astype(str).str.upper().str.strip()
-        unique_vals = str_vals.value_counts()
+        # Filter by transaction type using the working pattern
+        nb_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('NB', na=False)].copy()
+        c_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('C', na=False)].copy()
+        r_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('R', na=False)].copy()
         
-        st.write(f"  📊 **Transaction column '{self.transaction_column}' contains:**")
-        for val, count in unique_vals.head(10).items():
-            st.write(f"    '{val}': {count} records")
+        st.write(f"  - NB records found: {len(nb_df)}")
+        st.write(f"  - C records found: {len(c_df)}")
+        st.write(f"  - R records found: {len(r_df)}")
         
-        # HUMAN INTELLIGENCE: Look for patterns that might be transaction codes
-        st.write("🔍 **HUMAN ANALYSIS: Looking for transaction code patterns...**")
-        
-        # Check if we have any obvious transaction codes
-        nb_found = False
-        c_found = False
-        r_found = False
-        
-        for val, count in unique_vals.items():
-            if count > 10:  # Significant count
-                val_str = str(val).upper().strip()
-                
-                # Look for NB patterns
-                if any(pattern in val_str for pattern in ['NB', 'NEW', 'N', 'NEWBUSINESS', 'NEW_BUSINESS']):
-                    st.write(f"    ✅ **Found NB pattern: '{val}' ({count} times)**")
-                    nb_found = True
-                
-                # Look for C patterns  
-                elif any(pattern in val_str for pattern in ['C', 'CANCEL', 'CANCELLATION', 'CXL']):
-                    st.write(f"    ✅ **Found C pattern: '{val}' ({count} times)**")
-                    c_found = True
-                
-                # Look for R patterns
-                elif any(pattern in val_str for pattern in ['R', 'REINSTATE', 'REINSTATEMENT', 'REINST']):
-                    st.write(f"    ✅ **Found R pattern: '{val}' ({count} times)**")
-                    r_found = True
-        
-        # HUMAN INTELLIGENCE: If we found patterns, use them for filtering
-        if nb_found or c_found or r_found:
-            st.write("✅ **HUMAN INTELLIGENCE: Found transaction patterns, proceeding with filtering...**")
-            
-            # Filter by transaction type using the patterns we found
-            nb_df = pd.DataFrame()
-            c_df = pd.DataFrame()
-            r_df = pd.DataFrame()
-            
-            # Get the actual data (skip header)
-            data_df = self.df.iloc[1:].copy()
-            
-            # Filter NB records
-            if nb_found:
-                nb_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('|'.join(['NB', 'NEW', 'N', 'NEWBUSINESS', 'NEW_BUSINESS']), na=False, regex=True)
-                nb_df = data_df[nb_mask].copy()
-                st.write(f"  - NB records found: {len(nb_df)}")
-            
-            # Filter C records
-            if c_found:
-                c_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('|'.join(['C', 'CANCEL', 'CANCELLATION', 'CXL']), na=False, regex=True)
-                c_df = data_df[c_mask].copy()
-                st.write(f"  - C records found: {len(c_df)}")
-            
-            # Filter R records
-            if r_found:
-                r_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('|'.join(['R', 'REINSTATE', 'REINSTATEMENT', 'REINST']), na=False, regex=True)
-                r_df = data_df[r_mask].copy()
-                st.write(f"  - R records found: {len(r_df)}")
-            
-        else:
-            st.write("🚨 **HUMAN INTELLIGENCE: No clear transaction patterns found!**")
-            st.write("🔍 **Let me examine the data more carefully...**")
-            
-            # HUMAN INTELLIGENCE: Look at the actual values and try to understand them
-            st.write("🔍 **HUMAN ANALYSIS: Examining actual data values...**")
-            
-            # Show more detailed analysis of what we found
-            for val, count in unique_vals.items():
-                if count > 20:  # Show significant patterns
-                    st.write(f"    📊 '{val}': {count} records - **This looks like it might be a transaction code!**")
-                    
-                    # Try to classify this value
-                    val_str = str(val).upper().strip()
-                    
-                    # Check if it's a number that might represent transaction types
-                    try:
-                        val_num = float(val)
-                        if val_num in [1, 10, 100, 1000]:
-                            st.write(f"      🎯 **Numeric code {val_num} - likely represents NB (New Business)**")
-                        elif val_num in [2, 20, 200, 2000]:
-                            st.write(f"      🎯 **Numeric code {val_num} - likely represents C (Cancellation)**")
-                        elif val_num in [3, 30, 300, 3000]:
-                            st.write(f"      🎯 **Numeric code {val_num} - likely represents R (Reinstatement)**")
-                    except:
-                        pass
-            
-            # HUMAN INTELLIGENCE: If still no patterns, create a reasonable fallback
-            st.write("🔄 **HUMAN INTELLIGENCE: Creating reasonable fallback based on data analysis...**")
-            
-            # Look for the most common values and treat them as transaction types
-            most_common = unique_vals.head(3)
-            st.write(f"  📊 **Most common values (treating as transaction types):**")
-            
-            data_df = self.df.iloc[1:].copy()
-            
-            # Treat the most common values as transaction types
-            for i, (val, count) in enumerate(most_common.items()):
-                if i == 0:
-                    # First most common = NB (New Business)
-                    nb_mask = data_df[self.transaction_column] == val
-                    nb_df = data_df[nb_mask].copy()
-                    st.write(f"    '{val}' ({count} records) → **Treating as NB (New Business)**")
-                elif i == 1:
-                    # Second most common = C (Cancellation)
-                    c_mask = data_df[self.transaction_column] == val
-                    c_df = data_df[c_mask].copy()
-                    st.write(f"    '{val}' ({count} records) → **Treating as C (Cancellation)**")
-                elif i == 2:
-                    # Third most common = R (Reinstatement)
-                    r_mask = data_df[self.transaction_column] == val
-                    r_df = data_df[r_mask].copy()
-                    st.write(f"    '{val}' ({count} records) → **Treating as R (Reinstatement)**")
-        
-        # HUMAN INTELLIGENCE: Apply Karen 2.0 filtering logic with common sense
-        st.write("🔄 **HUMAN INTELLIGENCE: Applying Karen 2.0 filtering with common sense...**")
+        # Step 5: Apply Karen 2.0 filtering logic EXACTLY as specified
+        st.write("🔄 **Applying Karen 2.0 Filtering Logic EXACTLY...**")
         
         if len(nb_df) > 0:
-            nb_df = self._apply_karen_2_0_filtering(nb_df, 'NB')
+            nb_df = self._apply_karen_2_0_filtering_exact(nb_df, 'NB')
             st.write(f"  - NB after Karen 2.0 filtering: {len(nb_df)}")
         
         if len(r_df) > 0:
-            r_df = self._apply_karen_2_0_filtering(r_df, 'R')
+            r_df = self._apply_karen_2_0_filtering_exact(r_df, 'R')
             st.write(f"  - R after Karen 2.0 filtering: {len(r_df)}")
         
         if len(c_df) > 0:
-            c_df = self._apply_karen_2_0_filtering(c_df, 'C')
+            c_df = self._apply_karen_2_0_filtering_exact(c_df, 'C')
             st.write(f"  - C after Karen 2.0 filtering: {len(c_df)}")
-        
-        # HUMAN INTELLIGENCE: If filtering eliminated everything, use common sense
-        total_records = len(nb_df) + len(c_df) + len(r_df)
-        if total_records == 0:
-            st.write("🚨 **HUMAN INTELLIGENCE: All records filtered out! This suggests the filtering logic is too strict.**")
-            st.write("🔄 **Applying common sense: Using unfiltered data to ensure we have output...**")
-            
-            # Use the original filtered data without Admin sum filtering
-            if len(nb_df) == 0 and 'nb_df' in locals():
-                nb_df = data_df[nb_mask].copy() if 'nb_mask' in locals() else pd.DataFrame()
-            if len(c_df) == 0 and 'c_df' in locals():
-                c_df = data_df[c_mask].copy() if 'c_mask' in locals() else pd.DataFrame()
-            if len(r_df) == 0 and 'r_df' in locals():
-                r_df = data_df[r_mask].copy() if 'r_mask' in locals() else pd.DataFrame()
-            
-            st.write(f"  ✅ **Common sense applied: NB={len(nb_df)}, C={len(c_df)}, R={len(r_df)}**")
         
         # Create output dataframes with exact Karen 2.0 column order
         st.write("🔄 **Creating Output Dataframes (Karen 2.0 Format)...**")
         
-        nb_output = self._create_karen_2_0_output(nb_df, 'NB')
-        c_output = self._create_karen_2_0_output(c_df, 'C')
-        r_output = self._create_karen_2_0_output(r_df, 'R')
+        nb_output = self._create_karen_2_0_output_exact(nb_df, 'NB')
+        c_output = self._create_karen_2_0_output_exact(c_df, 'C')
+        r_output = self._create_karen_2_0_output_exact(r_df, 'R')
         
         st.write("✅ **Karen 2.0 Processing Complete!**")
         st.write(f"  - Final NB records: {len(nb_output)}")
@@ -571,33 +248,30 @@ class KarenNCBProcessor:
         
         return nb_output, c_output, r_output
     
-    def _apply_karen_2_0_filtering(self, df, transaction_type):
-        """Apply Karen 2.0 filtering logic with INSANELY SMART validation."""
+    def _apply_karen_2_0_filtering_exact(self, df, transaction_type):
+        """Apply Karen 2.0 filtering logic EXACTLY as specified: sum(AO, AQ, AU, AW, AY, BA, BC) > 0 for NB/R, < 0 for C."""
         if len(df) == 0:
             return df
         
-        st.write(f"🔍 **INSANELY SMART Filtering for {transaction_type}...**")
+        st.write(f"🔍 **Applying EXACT Karen 2.0 Filtering for {transaction_type}...**")
         
-        # Get Admin column values
+        # Get Admin column values EXACTLY as specified in Karen 2.0
         admin_cols = ['Admin_3_Amount_Agent_NCB_Fee', 'Admin_4_Amount_Dealer_NCB_Fee',
                      'Admin_6_Amount_Agent_NCB_Offset', 'Admin_7_Amount_Agent_NCB_Offset_Bucket',
                      'Admin_8_Amount_Dealer_NCB_Offset_Bucket', 'Admin_9_Amount_Agent_NCB_Offset',
                      'Admin_10_Amount_Dealer_NCB_Offset_Bucket']
         
-        # INSANELY SMART: Calculate Admin sum with detailed debugging
+        # Calculate Admin sum EXACTLY as specified
         admin_sum = 0
-        admin_values = {}
-        
         for admin_col in admin_cols:
             if admin_col in self.admin_columns:
                 col_name = self.admin_columns[admin_col]
                 if col_name in df.columns:
                     try:
                         numeric_data = pd.to_numeric(df[col_name], errors='coerce')
-                        admin_values[admin_col] = numeric_data.fillna(0)
                         admin_sum += numeric_data.fillna(0)
                         
-                        # INSANELY SMART: Show column statistics
+                        # Show column statistics
                         non_zero = (numeric_data != 0).sum()
                         total = numeric_data.notna().sum()
                         st.write(f"  {admin_col}: {col_name} - Non-zero: {non_zero}/{total}, Sum: {numeric_data.sum():.2f}")
@@ -605,18 +279,17 @@ class KarenNCBProcessor:
                     except Exception as e:
                         st.write(f"  ❌ Error processing {admin_col}: {str(e)}")
         
-        # INSANELY SMART: Show Admin sum statistics
-        if len(admin_values) > 0:
+        # Show Admin sum statistics
+        if len(admin_cols) > 0:
             st.write(f"  📊 Admin sum statistics:")
             st.write(f"    - Min: {admin_sum.min():.2f}")
             st.write(f"    - Max: {admin_sum.max():.2f}")
             st.write(f"    - Mean: {admin_sum.mean():.2f}")
-            st.write(f"    - Std: {admin_sum.std():.2f}")
             st.write(f"    - Non-zero count: {(admin_sum != 0).sum()}")
         
-        # INSANELY SMART: Apply filtering based on transaction type with detailed logging
+        # Apply filtering EXACTLY as specified in Karen 2.0
         if transaction_type in ['NB', 'R']:
-            # NB and R: sum > 0
+            # NB and R: sum(AO, AQ, AU, AW, AY, BA, BC) > 0
             filtered_df = df[admin_sum > 0]
             st.write(f"  🔄 {transaction_type} filtering: sum > 0")
             st.write(f"    - Before filter: {len(df)} records")
@@ -624,7 +297,7 @@ class KarenNCBProcessor:
             st.write(f"    - Records with sum > 0: {(admin_sum > 0).sum()}")
             
         elif transaction_type == 'C':
-            # C: sum < 0
+            # C: sum(AO, AQ, AU, AW, AY, BA, BC) < 0
             filtered_df = df[admin_sum < 0]
             st.write(f"  🔄 {transaction_type} filtering: sum < 0")
             st.write(f"    - Before filter: {len(df)} records")
@@ -635,85 +308,16 @@ class KarenNCBProcessor:
             filtered_df = df
             st.write(f"  ⚠️ Unknown transaction type: {transaction_type}, no filtering applied")
         
-        # INSANELY SMART: If filtering eliminated all records, try alternative logic
-        if len(filtered_df) == 0 and len(df) > 0:
-            st.write(f"  🚨 **INSANELY SMART FALLBACK: All records filtered out!**")
-            st.write(f"  🔍 **Analyzing why filtering failed...**")
-            
-            # Show distribution of Admin sums
-            st.write(f"  📊 Admin sum distribution:")
-            st.write(f"    - Negative: {(admin_sum < 0).sum()}")
-            st.write(f"    - Zero: {(admin_sum == 0).sum()}")
-            st.write(f"    - Positive: {(admin_sum > 0).sum()}")
-            
-            # HUMAN INTELLIGENCE: Try alternative filtering: any non-zero Admin amount
-            if transaction_type in ['NB', 'R']:
-                # NB and R: any Admin amount > 0
-                alt_filtered = df[admin_sum > 0]
-                st.write(f"  🔄 Alternative filter: any Admin > 0 → {len(alt_filtered)} records")
-                if len(alt_filtered) > 0:
-                    filtered_df = alt_filtered
-                    st.write(f"  ✅ **Using alternative filtering logic**")
-                    
-            elif transaction_type == 'C':
-                # C: any Admin amount < 0
-                alt_filtered = df[admin_sum < 0]
-                st.write(f"  🔄 Alternative filter: any Admin < 0 → {len(alt_filtered)} records")
-                if len(alt_filtered) > 0:
-                    filtered_df = alt_filtered
-                    st.write(f"  ✅ **Using alternative filtering logic**")
-            
-            # HUMAN INTELLIGENCE: If still no records, use common sense fallback
-            if len(filtered_df) == 0:
-                st.write(f"  🚨 **HUMAN INTELLIGENCE: Still no records after alternative filtering!**")
-                st.write(f"  🔍 **This suggests the Admin sum logic is fundamentally flawed for this data.**")
-                st.write(f"  🚨 **Common sense: The data might not follow the expected Admin sum pattern.**")
-                
-                # HUMAN INTELLIGENCE: Check if Admin columns actually contain the expected data
-                st.write(f"  🔍 **HUMAN ANALYSIS: Examining Admin column contents...**")
-                
-                for admin_col in admin_cols:
-                    if admin_col in self.admin_columns:
-                        col_name = self.admin_columns[admin_col]
-                        if col_name in df.columns:
-                            try:
-                                col_data = df[col_name]
-                                numeric_data = pd.to_numeric(col_data, errors='coerce')
-                                
-                                if not numeric_data.isna().all():
-                                    non_zero = (numeric_data != 0).sum()
-                                    total = numeric_data.notna().sum()
-                                    min_val = numeric_data.min()
-                                    max_val = numeric_data.max()
-                                    
-                                    st.write(f"    {admin_col}: {col_name}")
-                                    st.write(f"      - Non-zero: {non_zero}/{total}")
-                                    st.write(f"      - Range: {min_val:.2f} to {max_val:.2f}")
-                                    st.write(f"      - **This looks like valid Admin data!**")
-                                else:
-                                    st.write(f"    {admin_col}: {col_name} - **All values are NaN!**")
-                                    
-                            except Exception as e:
-                                st.write(f"    {admin_col}: {col_name} - **Error: {str(e)}**")
-                
-                # HUMAN INTELLIGENCE: Final fallback - use original data if Admin logic fails
-                st.write(f"  🚨 **HUMAN INTELLIGENCE: Admin sum filtering is not working for this data structure.**")
-                st.write(f"  🔄 **Common sense fallback: Using original transaction-filtered data without Admin filtering.**")
-                st.write(f"  📊 **This ensures we have output while following Karen 2.0 column structure.**")
-                
-                # Return the original data without Admin filtering
-                return df
-        
         return filtered_df
     
-    def _create_karen_2_0_output(self, df, transaction_type):
-        """Create output dataframe with exact Karen 2.0 column order."""
+    def _create_karen_2_0_output_exact(self, df, transaction_type):
+        """Create output dataframe with EXACT Karen 2.0 column order."""
         if len(df) == 0:
             return pd.DataFrame()
         
         output = pd.DataFrame()
         
-        # Map columns based on Karen 2.0 instructions
+        # Map columns based on Karen 2.0 instructions EXACTLY
         column_mapping = {
             'Insurer_Code': 'B',
             'Product_Type_Code': 'C',
@@ -727,7 +331,7 @@ class KarenNCBProcessor:
             'Customer_Last_Name': 'U'
         }
         
-        # Add cancellation-specific columns for C transactions
+        # Add cancellation-specific columns for C transactions EXACTLY as specified
         if transaction_type == 'C':
             column_mapping.update({
                 'Contract_Term': 'Z',
@@ -736,13 +340,13 @@ class KarenNCBProcessor:
                 'Cancellation_Factor': 'AA'
             })
         
-        # Map columns by Excel position
+        # Map columns by Excel position EXACTLY
         for field_name, excel_pos in column_mapping.items():
             col_idx = self._excel_position_to_index(excel_pos)
             if col_idx < len(df.columns):
                 output[field_name] = df.iloc[:, col_idx]
         
-        # Add Admin columns
+        # Add Admin columns EXACTLY as specified in Karen 2.0
         for admin_name, col_name in self.admin_columns.items():
             if col_name in df.columns:
                 output[admin_name] = df[col_name]
