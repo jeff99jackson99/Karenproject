@@ -71,81 +71,78 @@ def process_excel_data_karen_2_0(uploaded_file):
         return None
 
 def find_ncb_columns_simple(df):
-    """Find NCB columns by looking for Admin columns (AO, AQ, AU, AW, AY, BA, BC)."""
+    """Find NCB columns by looking for Admin columns based on actual file structure."""
     ncb_columns = {}
     
-    # Map Admin column positions to NCB types based on Karen 2.0 specs
+    # Based on the actual file structure, map Admin columns to NCB types
     admin_mapping = {
-        'AO': 'Agent NCB Fee',      # Admin 3 Amount (Agent NCB Fee)
-        'AQ': 'Dealer NCB Fee',     # Admin 4 Amount (Dealer NCB Fee)
-        'AU': 'Agent NCB Offset',   # Admin 6 Amount (Agent NCB Offset)
-        'AW': 'Agent NCB Offset Bucket', # Admin 7 Amount (Agent NCB Offset Bucket)
-        'AY': 'Dealer NCB Offset Bucket', # Admin 8 Amount (Dealer NCB Offset Bucket)
-        'BA': 'Agent NCB Offset',   # Admin 9 Amount (Agent NCB Offset)
-        'BC': 'Dealer NCB Offset Bucket'  # Admin 10 Amount (Dealer NCB Offset Bucket)
+        40: 'Agent NCB Fee',      # ADMIN 3 Amount (Agent NCB) - Column 40
+        42: 'Dealer NCB Fee',     # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
+        46: 'Agent NCB Offset Bucket', # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
+        52: 'Agent NCB Offset',   # ADMIN 9 Amount (Agent NCB Offset) - Column 52
+        54: 'Dealer NCB Offset Bucket', # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
     }
     
-    # Map column positions to actual column names
-    for i, col in enumerate(df.columns):
-        col_letter = chr(65 + i)  # Convert position to letter (A=0, B=1, etc.)
-        
-        if col_letter in admin_mapping:
-            ncb_type = admin_mapping[col_letter]
+    # Map Admin columns by their actual positions
+    for pos, ncb_type in admin_mapping.items():
+        if pos < len(df.columns):
+            col = df.columns[pos]
             ncb_columns[ncb_type] = col
-            st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {col_letter})")
+            st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {pos})")
     
-    # If we don't have enough, try to find numeric columns that might be Admin amounts
+    # If we don't have enough, try to find additional Admin columns
     if len(ncb_columns) < 7:
-        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional numeric columns...**")
+        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional Admin columns...**")
         
-        # Find additional numeric columns that could be Admin amounts
-        numeric_cols = []
-        for col in df.columns:
+        # Look for additional Admin columns that might contain NCB amounts
+        for i, col in enumerate(df.columns):
             try:
-                if df[col].dtype in ['int64', 'float64'] or pd.to_numeric(df[col], errors='coerce').notna().any():
-                    numeric_cols.append(col)
+                if 'ADMIN' in str(col) and 'Amount' in str(col):
+                    # Check if this column has meaningful values
+                    values = df.iloc[1:, i].dropna()  # Skip header row
+                    if len(values) > 0:
+                        numeric_vals = pd.to_numeric(values, errors='coerce')
+                        non_zero = (numeric_vals != 0).sum()
+                        if non_zero > 0 and non_zero < len(values) * 0.9:  # Not all zeros, not all non-zero
+                            # Find a unique name for this Admin column
+                            admin_num = f"Admin_{len(ncb_columns) + 1}"
+                            ncb_columns[admin_num] = col
+                            st.write(f"✅ **Found additional Admin column:** {admin_num} → {col} (Position {i})")
+                            
+                            if len(ncb_columns) >= 7:
+                                break
             except:
                 pass
-        
-        # Use the first few numeric columns to fill in missing NCB columns
-        missing_ncb_types = [ncb_type for ncb_type in admin_mapping.values() if ncb_type not in ncb_columns]
-        
-        for i, ncb_type in enumerate(missing_ncb_types):
-            if i < len(numeric_cols):
-                ncb_columns[ncb_type] = numeric_cols[i]
-                st.write(f"✅ **Mapped numeric column:** {ncb_type} → {numeric_cols[i]}")
     
     return ncb_columns
 
 def find_required_columns_simple(df):
-    """Find required columns by simple position mapping."""
+    """Find required columns by simple position mapping based on actual file structure."""
     required_cols = {}
     
-    # Map column positions to required columns based on Karen 2.0 specs
+    # Based on the actual file structure, map column positions to required columns
     position_mapping = {
-        'B': 'Insurer Code',
-        'C': 'Product Type Code', 
-        'D': 'Coverage Code',
-        'E': 'Dealer Number',
-        'F': 'Dealer Name',
-        'H': 'Contract Number',
-        'L': 'Contract Sale Date',
-        'J': 'Transaction Date',
-        'M': 'Transaction Type',
-        'U': 'Customer Last Name',
-        'Z': 'Contract Term',
-        'AE': 'Cancellation Date',
-        'AB': 'Cancellation Reason',
-        'AA': 'Cancellation Factor'
+        1: 'Insurer Code',        # Column 1 (B)
+        2: 'Product Type Code',   # Column 2 (C) 
+        3: 'Coverage Code',       # Column 3 (D)
+        4: 'Dealer Number',       # Column 4 (E)
+        5: 'Dealer Name',         # Column 5 (F)
+        6: 'Contract Number',     # Column 6 (G)
+        7: 'Contract Sale Date',  # Column 7 (H)
+        8: 'Transaction Date',    # Column 8 (I)
+        9: 'Transaction Type',    # Column 9 (J) - This contains the dropdown values C, R, NB, A
+        10: 'Customer Last Name', # Column 10 (K)
+        20: 'Contract Term',      # Column 20 (U) - Term Months
+        27: 'Cancellation Factor', # Column 27 (AB)
+        28: 'Cancellation Reason', # Column 28 (AC)
+        26: 'Cancellation Date',  # Column 26 (AA) - Number of Days in Force
     }
     
     # Map by position
     for i, col in enumerate(df.columns):
-        col_letter = chr(65 + i)  # Convert position to letter (A=0, B=1, etc.)
-        
-        if col_letter in position_mapping:
-            required_cols[col_letter] = col
-            st.write(f"✅ **Found required column:** {col_letter} ({position_mapping[col_letter]}) → {col}")
+        if i in position_mapping:
+            required_cols[chr(65 + i)] = col  # Convert position to letter (A=0, B=1, etc.)
+            st.write(f"✅ **Found required column:** {chr(65 + i)} ({position_mapping[i]}) → {col}")
     
     return required_cols
 
@@ -173,7 +170,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         df['NCB_Sum'] = df[ncb_cols].sum(axis=1)
         
         # Find transaction type column
-        transaction_col = required_cols.get('M')
+        transaction_col = required_cols.get('J') # Changed from 'M' to 'J'
         if not transaction_col:
             st.error("❌ No transaction type column found")
             return None
@@ -216,11 +213,10 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         # Data Set 1: New Business (NB)
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
-            required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
-            required_cols.get('U'), ncb_columns.get('Agent NCB Fee'),
-            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset'),
-            ncb_columns.get('Agent NCB Offset Bucket'), ncb_columns.get('Dealer NCB Offset Bucket'),
+            required_cols.get('E'), required_cols.get('F'), required_cols.get('G'),
+            required_cols.get('H'), required_cols.get('I'), required_cols.get('J'),
+            required_cols.get('K'), ncb_columns.get('Agent NCB Fee'),
+            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
             ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket')
         ]
         
@@ -230,12 +226,11 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         # Data Set 3: Cancellations (C) - additional columns
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
-            required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
-            required_cols.get('U'), required_cols.get('Z'), required_cols.get('AE'),
-            required_cols.get('AB'), required_cols.get('AA'), ncb_columns.get('Agent NCB Fee'),
-            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset'),
-            ncb_columns.get('Agent NCB Offset Bucket'), ncb_columns.get('Dealer NCB Offset Bucket'),
+            required_cols.get('E'), required_cols.get('F'), required_cols.get('G'),
+            required_cols.get('H'), required_cols.get('I'), required_cols.get('J'),
+            required_cols.get('K'), required_cols.get('U'), required_cols.get('AA'),
+            required_cols.get('AC'), required_cols.get('AB'), ncb_columns.get('Agent NCB Fee'),
+            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
             ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket')
         ]
         
