@@ -11,180 +11,8 @@ import io
 
 st.set_page_config(page_title="Karen 2.0 NCB Data Processor", page_icon="📊", layout="wide")
 
-def detect_column_structure(excel_file):
-    """Detect the actual column structure from the Col Ref sheet."""
-    try:
-        # Read the Col Ref sheet to understand column mapping
-        col_ref_df = pd.read_excel(excel_file, sheet_name='Col Ref')
-        
-        # Look for the row that contains column descriptions
-        column_mapping = {}
-        
-        # Find the row with column descriptions (usually row 1)
-        for idx, row in col_ref_df.iterrows():
-            if 'Admin' in str(row.iloc[2]) or 'NCB' in str(row.iloc[7]):
-                # This is the row with column descriptions
-                for col_idx, value in enumerate(row):
-                    if pd.notna(value) and str(value).strip():
-                        column_mapping[col_idx] = str(value).strip()
-                break
-        
-        st.write("🔍 **Column Structure Detected:**")
-        for col_idx, desc in column_mapping.items():
-            st.write(f"  Column {col_idx}: {desc}")
-        
-        return column_mapping
-        
-    except Exception as e:
-        st.warning(f"⚠️ Could not read 'Col Ref' sheet: {e}")
-        st.write("🔄 **Trying alternative column detection methods...**")
-        return {}
-
-def find_ncb_columns(df, column_mapping):
-    """Find NCB-related columns based on the Karen 2.0 specifications."""
-    ncb_columns = {}
-    
-    # NCB-related labels to match against
-    ncb_labels = [
-        'Agent NCB', 'Agent NCB Fee', 'Dealer NCB', 'Dealer NCB Fee',
-        'Agent NCB Offset', 'Agent NCB Offset Bucket', 'Dealer NCB Offset', 'Dealer NCB Offset Bucket'
-    ]
-    
-    # Look for NCB columns based on the mapping
-    for col_idx, desc in column_mapping.items():
-        if col_idx < len(df.columns):
-            col_name = df.columns[col_idx]
-            
-            # Check if this column description matches any NCB label
-            for ncb_label in ncb_labels:
-                if ncb_label.lower() in desc.lower():
-                    # This is an NCB column, find the amount column (next cell over)
-                    if col_idx + 1 < len(df.columns):
-                        amount_col = df.columns[col_idx + 1]
-                        ncb_columns[ncb_label] = amount_col
-                        st.write(f"✅ **Found NCB column:** {ncb_label} → {amount_col}")
-                    break
-    
-    # If we don't have enough NCB columns, try to find them by content analysis
-    if len(ncb_columns) < 7:  # We need 7 NCB columns
-        with st.expander("⚠️ **NCB Column Detection Details** (Click to expand)", expanded=False):
-            st.warning("⚠️ Could not identify all NCB columns from mapping, trying content-based detection...")
-            
-            # Look for columns that might contain NCB amounts by analyzing their content
-            potential_ncb_cols = []
-            
-            for col in df.columns:
-                try:
-                    # Skip datetime columns
-                    if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
-                        continue
-                        
-                    # Try to convert to numeric
-                    numeric_values = pd.to_numeric(df[col], errors='coerce')
-                    if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
-                        # Check if this column has meaningful non-zero values
-                        non_zero_count = (numeric_values != 0).sum()
-                        total_count = len(numeric_values)
-                        
-                        # Only consider columns with a reasonable number of non-zero values
-                        if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
-                            potential_ncb_cols.append({
-                                'column': col,
-                                'non_zero_count': non_zero_count,
-                                'total_count': total_count,
-                                'non_zero_ratio': non_zero_count / total_count
-                            })
-                except:
-                    pass
-            
-            # Sort by non-zero ratio to find the most likely NCB columns
-            potential_ncb_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
-            
-            st.write(f"🔍 **Potential NCB columns found:** {len(potential_ncb_cols)}")
-            for i, col_info in enumerate(potential_ncb_cols[:10]):  # Show top 10
-                st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
-            
-            # Assign the top 7 columns as NCB columns
-            if len(potential_ncb_cols) >= 7:
-                ncb_columns = {
-                    'Agent NCB Fee': potential_ncb_cols[0]['column'],
-                    'Dealer NCB Fee': potential_ncb_cols[1]['column'],
-                    'Agent NCB Offset': potential_ncb_cols[2]['column'],
-                    'Agent NCB Offset Bucket': potential_ncb_cols[3]['column'],
-                    'Dealer NCB Offset Bucket': potential_ncb_cols[4]['column'],
-                    'Agent NCB Offset': potential_ncb_cols[5]['column'],
-                    'Dealer NCB Offset Bucket': potential_ncb_cols[6]['column']
-                }
-                
-                st.write(f"✅ **NCB columns assigned by content analysis:**")
-                for ncb_type, col_name in ncb_columns.items():
-                    st.write(f"  {ncb_type}: {col_name}")
-            else:
-                st.error(f"❌ Not enough potential NCB columns found. Need 7, found {len(potential_ncb_cols)}")
-    
-    return ncb_columns
-
-def find_required_columns(df):
-    """Find the required columns for each dataset based on Karen 2.0 specifications."""
-    required_cols = {}
-    
-    # Data Set 1 & 2 (NB & R) - Common columns
-    common_cols = [
-        'B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U',  # Basic info
-        'AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC'  # NCB amounts
-    ]
-    
-    # Data Set 3 (C) - Additional columns
-    cancellation_cols = common_cols + ['Z', 'AE', 'AB', 'AA']
-    
-    # Try to find columns by position or name
-    for col in df.columns:
-        col_str = str(col)
-        
-        # Map column positions to names
-        if col_str == 'B' or 'insurer' in col_str.lower():
-            required_cols['B'] = col
-        elif col_str == 'C' or 'product' in col_str.lower():
-            required_cols['C'] = col
-        elif col_str == 'D' or 'coverage' in col_str.lower():
-            required_cols['D'] = col
-        elif col_str == 'E' or 'dealer' in col_str.lower() and 'number' in col_str.lower():
-            required_cols['E'] = col
-        elif col_str == 'F' or 'dealer' in col_str.lower() and 'name' in col_str.lower():
-            required_cols['F'] = col
-        elif col_str == 'H' or 'contract' in col_str.lower() and 'number' in col_str.lower():
-            required_cols['H'] = col
-        elif col_str == 'L' or 'sale' in col_str.lower() and 'date' in col_str.lower():
-            required_cols['L'] = col
-        elif col_str == 'J' or 'transaction' in col_str.lower() and 'date' in col_str.lower():
-            required_cols['J'] = col
-        elif col_str == 'M' or 'transaction' in col_str.lower() and 'type' in col_str.lower():
-            required_cols['M'] = col
-        elif col_str == 'U' or 'last' in col_str.lower() and 'name' in col_str.lower():
-            required_cols['U'] = col
-        elif col_str == 'Z' or 'term' in col_str.lower():
-            required_cols['Z'] = col
-        elif col_str == 'AE' or 'cancellation' in col_str.lower() and 'date' in col_str.lower():
-            required_cols['AE'] = col
-        elif col_str == 'AB' or 'reason' in col_str.lower():
-            required_cols['AB'] = col
-        elif col_str == 'AA' or 'factor' in col_str.lower():
-            required_cols['AA'] = col
-    
-    # If we can't find columns by name, try to map by position
-    if len(required_cols) < len(common_cols):
-        st.warning("⚠️ Could not identify all required columns by name, using position-based mapping...")
-        
-        # Map by position (assuming first few columns are in order)
-        for i, col in enumerate(df.columns[:len(common_cols)]):
-            if i < len(common_cols):
-                col_letter = chr(66 + i)  # Start from 'B'
-                required_cols[col_letter] = col
-    
-    return required_cols
-
 def process_excel_data_karen_2_0(uploaded_file):
-    """Process Excel data using smart column detection for Karen 2.0."""
+    """Process Excel data from the Data tab for Karen 2.0."""
     try:
         excel_data = pd.ExcelFile(uploaded_file)
         
@@ -193,40 +21,27 @@ def process_excel_data_karen_2_0(uploaded_file):
             st.write("🔍 **Karen 2.0 Processing Started**")
             st.write(f"📊 Sheets found: {excel_data.sheet_names}")
             
-            # Detect column structure
-            column_mapping = detect_column_structure(uploaded_file)
+            # Process ONLY the Data sheet (main transaction data)
+            data_sheet_name = 'Data'
             
-            # Process the Data sheet (main transaction data)
-            data_sheet_name = None
-            
-            # Look for common data sheet names
-            for sheet_name in excel_data.sheet_names:
-                if any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'detail', 'main']):
-                    data_sheet_name = sheet_name
-                    break
-            
-            # If no obvious data sheet found, try the first sheet that's not a summary
-            if not data_sheet_name:
-                for sheet_name in excel_data.sheet_names:
-                    if not any(keyword in sheet_name.lower() for keyword in ['summary', 'xref', 'ref', 'instruction']):
-                        data_sheet_name = sheet_name
-                        break
-            
-            if data_sheet_name:
+            if data_sheet_name in excel_data.sheet_names:
                 st.write(f"📋 **Processing {data_sheet_name} Sheet**")
                 
-                # Read the data sheet
+                # Read the Data sheet
                 df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
                 st.write(f"📏 Data shape: {df.shape}")
                 
-                # Find NCB columns
-                ncb_columns = find_ncb_columns(df, column_mapping)
+                # Show first few column names to understand structure
+                st.write(f"🔍 **First 20 columns:** {list(df.columns[:20])}")
+                
+                # Find NCB columns by looking for Admin columns (AO, AQ, AU, AW, AY, BA, BC)
+                ncb_columns = find_ncb_columns_simple(df)
                 st.write("🔍 **NCB Columns Found:**")
                 for ncb_type, col_name in ncb_columns.items():
                     st.write(f"  {ncb_type}: {col_name}")
                 
-                # Find required columns
-                required_cols = find_required_columns(df)
+                # Find required columns by position mapping
+                required_cols = find_required_columns_simple(df)
                 st.write("🔍 **Required Columns Found:**")
                 for col_letter, col_name in required_cols.items():
                     st.write(f"  {col_letter}: {col_name}")
@@ -236,7 +51,6 @@ def process_excel_data_karen_2_0(uploaded_file):
                     results = process_transaction_data_karen_2_0(df, ncb_columns, required_cols)
                     
                     if results:
-                        results['column_mapping'] = column_mapping
                         results['ncb_columns'] = ncb_columns
                         results['required_cols'] = required_cols
                         
@@ -247,7 +61,7 @@ def process_excel_data_karen_2_0(uploaded_file):
                     st.error(f"❌ Need at least 7 NCB columns and 10 required columns, found {len(ncb_columns)} NCB and {len(required_cols)} required")
                     return None
             else:
-                st.error("❌ No suitable data sheet found")
+                st.error(f"❌ '{data_sheet_name}' sheet not found. Available sheets: {excel_data.sheet_names}")
                 return None
                 
     except Exception as e:
@@ -255,6 +69,85 @@ def process_excel_data_karen_2_0(uploaded_file):
         import traceback
         st.code(traceback.format_exc())
         return None
+
+def find_ncb_columns_simple(df):
+    """Find NCB columns by looking for Admin columns (AO, AQ, AU, AW, AY, BA, BC)."""
+    ncb_columns = {}
+    
+    # Map Admin column positions to NCB types based on Karen 2.0 specs
+    admin_mapping = {
+        'AO': 'Agent NCB Fee',      # Admin 3 Amount (Agent NCB Fee)
+        'AQ': 'Dealer NCB Fee',     # Admin 4 Amount (Dealer NCB Fee)
+        'AU': 'Agent NCB Offset',   # Admin 6 Amount (Agent NCB Offset)
+        'AW': 'Agent NCB Offset Bucket', # Admin 7 Amount (Agent NCB Offset Bucket)
+        'AY': 'Dealer NCB Offset Bucket', # Admin 8 Amount (Dealer NCB Offset Bucket)
+        'BA': 'Agent NCB Offset',   # Admin 9 Amount (Agent NCB Offset)
+        'BC': 'Dealer NCB Offset Bucket'  # Admin 10 Amount (Dealer NCB Offset Bucket)
+    }
+    
+    # Map column positions to actual column names
+    for i, col in enumerate(df.columns):
+        col_letter = chr(65 + i)  # Convert position to letter (A=0, B=1, etc.)
+        
+        if col_letter in admin_mapping:
+            ncb_type = admin_mapping[col_letter]
+            ncb_columns[ncb_type] = col
+            st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {col_letter})")
+    
+    # If we don't have enough, try to find numeric columns that might be Admin amounts
+    if len(ncb_columns) < 7:
+        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional numeric columns...**")
+        
+        # Find additional numeric columns that could be Admin amounts
+        numeric_cols = []
+        for col in df.columns:
+            try:
+                if df[col].dtype in ['int64', 'float64'] or pd.to_numeric(df[col], errors='coerce').notna().any():
+                    numeric_cols.append(col)
+            except:
+                pass
+        
+        # Use the first few numeric columns to fill in missing NCB columns
+        missing_ncb_types = [ncb_type for ncb_type in admin_mapping.values() if ncb_type not in ncb_columns]
+        
+        for i, ncb_type in enumerate(missing_ncb_types):
+            if i < len(numeric_cols):
+                ncb_columns[ncb_type] = numeric_cols[i]
+                st.write(f"✅ **Mapped numeric column:** {ncb_type} → {numeric_cols[i]}")
+    
+    return ncb_columns
+
+def find_required_columns_simple(df):
+    """Find required columns by simple position mapping."""
+    required_cols = {}
+    
+    # Map column positions to required columns based on Karen 2.0 specs
+    position_mapping = {
+        'B': 'Insurer Code',
+        'C': 'Product Type Code', 
+        'D': 'Coverage Code',
+        'E': 'Dealer Number',
+        'F': 'Dealer Name',
+        'H': 'Contract Number',
+        'L': 'Contract Sale Date',
+        'J': 'Transaction Date',
+        'M': 'Transaction Type',
+        'U': 'Customer Last Name',
+        'Z': 'Contract Term',
+        'AE': 'Cancellation Date',
+        'AB': 'Cancellation Reason',
+        'AA': 'Cancellation Factor'
+    }
+    
+    # Map by position
+    for i, col in enumerate(df.columns):
+        col_letter = chr(65 + i)  # Convert position to letter (A=0, B=1, etc.)
+        
+        if col_letter in position_mapping:
+            required_cols[col_letter] = col
+            st.write(f"✅ **Found required column:** {col_letter} ({position_mapping[col_letter]}) → {col}")
+    
+    return required_cols
 
 def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
     """Process transaction data according to Karen 2.0 specifications."""
