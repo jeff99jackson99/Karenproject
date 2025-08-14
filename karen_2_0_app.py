@@ -429,6 +429,141 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
             st.write(f"  Reinstatements (sum >= 0): {len(r_filtered)}")
             st.write(f"  Cancellations (sum <= 0): {len(c_filtered)}")
         
+        # CRITICAL DEBUGGING: Show exactly what's happening at each step
+        st.write("🔍 **CRITICAL DEBUGGING - Step by Step Analysis:**")
+        
+        # Step 1: Check if transaction filtering worked
+        st.write(f"🔍 **Step 1 - Transaction Filtering Results:**")
+        st.write(f"  Original NB mask count: {nb_mask.sum()}")
+        st.write(f"  Original C mask count: {c_mask.sum()}")
+        st.write(f"  Original R mask count: {r_mask.sum()}")
+        
+        # Step 2: Check if DataFrames were created
+        st.write(f"🔍 **Step 2 - DataFrame Creation Results:**")
+        st.write(f"  NB DataFrame created: {nb_df.shape if len(nb_df) > 0 else 'EMPTY'}")
+        st.write(f"  C DataFrame created: {c_df.shape if len(c_df) > 0 else 'EMPTY'}")
+        st.write(f"  R DataFrame created: {r_df.shape if len(r_df) > 0 else 'EMPTY'}")
+        
+        # Step 3: Check NCB sum calculation
+        st.write(f"🔍 **Step 3 - NCB Sum Calculation Results:**")
+        if len(nb_df) > 0:
+            st.write(f"  NB NCB columns used: {ncb_cols}")
+            st.write(f"  NB NCB_Sum column exists: {'NCB_Sum' in nb_df.columns}")
+            if 'NCB_Sum' in nb_df.columns:
+                st.write(f"  NB NCB_Sum data type: {nb_df['NCB_Sum'].dtype}")
+                st.write(f"  NB NCB_Sum range: {nb_df['NCB_Sum'].min()} to {nb_df['NCB_Sum'].max()}")
+                st.write(f"  NB NCB_Sum sample: {nb_df['NCB_Sum'].head(5).tolist()}")
+        
+        if len(c_df) > 0:
+            st.write(f"  C NCB_Sum column exists: {'NCB_Sum' in c_df.columns}")
+            if 'NCB_Sum' in c_df.columns:
+                st.write(f"  C NCB_Sum range: {c_df['NCB_Sum'].min()} to {c_df['NCB_Sum'].max()}")
+                st.write(f"  C NCB_Sum sample: {c_df['NCB_Sum'].head(5).tolist()}")
+        
+        if len(r_df) > 0:
+            st.write(f"  R NCB_Sum column exists: {'NCB_Sum' in r_df.columns}")
+            if 'NCB_Sum' in r_df.columns:
+                st.write(f"  R NCB_Sum range: {r_df['NCB_Sum'].min()} to {r_df['NCB_Sum'].max()}")
+                st.write(f"  R NCB_Sum sample: {r_df['NCB_Sum'].head(5).tolist()}")
+        
+        # Step 4: Check filtering results
+        st.write(f"🔍 **Step 4 - Filtering Results:**")
+        st.write(f"  NB filtered count: {len(nb_filtered)}")
+        st.write(f"  C filtered count: {len(c_filtered)}")
+        st.write(f"  R filtered count: {len(r_filtered)}")
+        
+        # Step 5: Check if the issue is in the filtering logic
+        st.write(f"🔍 **Step 5 - Filtering Logic Debug:**")
+        if len(nb_df) > 0 and 'NCB_Sum' in nb_df.columns:
+            nb_gt_zero = (nb_df['NCB_Sum'] > 0).sum()
+            nb_eq_zero = (nb_df['NCB_Sum'] == 0).sum()
+            nb_lt_zero = (nb_df['NCB_Sum'] < 0).sum()
+            st.write(f"  NB sum > 0: {nb_gt_zero}")
+            st.write(f"  NB sum = 0: {nb_eq_zero}")
+            st.write(f"  NB sum < 0: {nb_lt_zero}")
+            
+            # Show what the filtering would produce with different criteria
+            if approach == 'karen_2_0':
+                st.write(f"  Karen 2.0 filtering (sum > 0): {nb_gt_zero}")
+            else:
+                st.write(f"  Working approach filtering (sum >= 0): {nb_gt_zero + nb_eq_zero}")
+        
+        if len(c_df) > 0 and 'NCB_Sum' in c_df.columns:
+            c_gt_zero = (c_df['NCB_Sum'] > 0).sum()
+            c_eq_zero = (c_df['NCB_Sum'] == 0).sum()
+            c_lt_zero = (c_df['NCB_Sum'] < 0).sum()
+            st.write(f"  C sum > 0: {c_gt_zero}")
+            st.write(f"  C sum = 0: {c_eq_zero}")
+            st.write(f"  C sum < 0: {c_lt_zero}")
+            
+            # Show what the filtering would produce with different criteria
+            if approach == 'karen_2_0':
+                st.write(f"  Karen 2.0 filtering (sum < 0): {c_lt_zero}")
+            else:
+                st.write(f"  Working approach filtering (sum <= 0): {c_lt_zero + c_eq_zero}")
+        
+        if len(r_df) > 0 and 'NCB_Sum' in r_df.columns:
+            r_gt_zero = (r_df['NCB_Sum'] > 0).sum()
+            r_eq_zero = (r_df['NCB_Sum'] == 0).sum()
+            r_lt_zero = (r_df['NCB_Sum'] < 0).sum()
+            st.write(f"  R sum > 0: {r_gt_zero}")
+            st.write(f"  R sum = 0: {r_eq_zero}")
+            st.write(f"  R sum < 0: {r_lt_zero}")
+            
+            # Show what the filtering would produce with different criteria
+            if approach == 'karen_2_0':
+                st.write(f"  Karen 2.0 filtering (sum > 0): {r_gt_zero}")
+            else:
+                st.write(f"  Working approach filtering (sum >= 0): {r_gt_zero + r_eq_zero}")
+        
+        # Step 6: Check if the issue is in the NCB sum calculation itself
+        st.write(f"🔍 **Step 6 - NCB Sum Calculation Debug:**")
+        if len(nb_df) > 0:
+            st.write(f"  NB DataFrame columns: {list(nb_df.columns)}")
+            st.write(f"  NCB columns to sum: {ncb_cols}")
+            
+            # Check each NCB column individually
+            for col in ncb_cols:
+                if col in nb_df.columns:
+                    col_vals = nb_df[col].head(5).tolist()
+                    st.write(f"    {col}: {col_vals}")
+                else:
+                    st.write(f"    ❌ {col}: Column not found in NB DataFrame")
+            
+            # Try manual sum calculation
+            if all(col in nb_df.columns for col in ncb_cols):
+                manual_sum = nb_df[ncb_cols].fillna(0).sum(axis=1).head(5)
+                st.write(f"  Manual NCB sum (first 5): {manual_sum.tolist()}")
+            else:
+                st.write(f"  ❌ Cannot calculate manual sum - missing columns")
+        
+        # Step 7: Check if the issue is in the transaction type detection
+        st.write(f"🔍 **Step 7 - Transaction Type Detection Debug:**")
+        st.write(f"  Transaction column: {transaction_col}")
+        st.write(f"  Transaction column type: {type(df[transaction_col])}")
+        
+        if isinstance(df[transaction_col], pd.DataFrame):
+            st.write(f"  ❌ Transaction column is a DataFrame - this is the problem!")
+            st.write(f"  Transaction column shape: {df[transaction_col].shape}")
+            st.write(f"  Transaction column columns: {list(df[transaction_col].columns)}")
+        else:
+            st.write(f"  ✅ Transaction column is a Series")
+            st.write(f"  Transaction column length: {len(df[transaction_col])}")
+        
+        # Show sample transaction values
+        if transaction_col in df.columns:
+            sample_transactions = df[transaction_col].astype(str).head(10).tolist()
+            st.write(f"  Sample transaction values: {sample_transactions}")
+            
+            # Check for exact matches
+            nb_exact = df[transaction_col].astype(str).str.upper() == 'NB'
+            c_exact = df[transaction_col].astype(str).str.upper() == 'C'
+            r_exact = df[transaction_col].astype(str).str.upper() == 'R'
+            
+            st.write(f"  Exact 'NB' matches: {nb_exact.sum()}")
+            st.write(f"  Exact 'C' matches: {c_exact.sum()}")
+            st.write(f"  Exact 'R' matches: {r_exact.sum()}")
+        
         # Show distribution of NCB sums for debugging
         if len(nb_df) > 0:
             st.write(f"🔍 **NB NCB sum distribution:**")
