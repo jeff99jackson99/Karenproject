@@ -175,7 +175,7 @@ def find_transaction_column(df):
     return transaction_col
 
 def process_data_v2(df, column_mapping, admin_columns, amount_columns):
-    """Process data according to version 2.0 requirements - using working logic from first version."""
+    """Process data according to version 2.0 requirements - using working logic from first version with new column mapping."""
     
     # Find transaction column
     transaction_col = find_transaction_column(df)
@@ -299,39 +299,90 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         r_filtered = r_df
         st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
     
-    # Create separate dataframes for each transaction type with proper column naming
-    nb_output = nb_filtered.copy()
-    c_output = c_filtered.copy()
-    r_output = r_filtered.copy()
-    
-    # Rename columns to be more meaningful based on the reference sheet structure
-    if column_mapping:
-        # Create a mapping from column index to meaningful names
-        col_rename_map = {}
-        for col_idx, desc in column_mapping.items():
-            if col_idx < len(nb_output.columns):
-                col_name = nb_output.columns[col_idx]
-                if 'Unnamed' in str(col_name):
-                    # Replace unnamed columns with meaningful names from reference sheet
-                    col_rename_map[col_name] = f"Col_{col_idx}_{desc}"
+    # Create output dataframes with the NEW specific column mapping from instructions
+    # Data Set 1 - New Business (NB)
+    nb_output = pd.DataFrame()
+    if len(nb_filtered) > 0:
+        nb_output['Insurer_Code'] = nb_filtered.iloc[:, 1]  # Column B
+        nb_output['Product_Type_Code'] = nb_filtered.iloc[:, 2]  # Column C
+        nb_output['Coverage_Code'] = nb_filtered.iloc[:, 3]  # Column D
+        nb_output['Dealer_Number'] = nb_filtered.iloc[:, 4]  # Column E
+        nb_output['Dealer_Name'] = nb_filtered.iloc[:, 5]  # Column F
+        nb_output['Contract_Number'] = nb_filtered.iloc[:, 7]  # Column H
+        nb_output['Contract_Sale_Date'] = nb_filtered.iloc[:, 11]  # Column L
+        nb_output['Transaction_Date'] = nb_filtered.iloc[:, 9]  # Column J
+        nb_output['Transaction_Type'] = nb_filtered.iloc[:, 12]  # Column M
+        nb_output['Customer_Last_Name'] = nb_filtered.iloc[:, 20]  # Column U
         
-        # Apply column renaming
-        if col_rename_map:
-            nb_output = nb_output.rename(columns=col_rename_map)
-            c_output = c_output.rename(columns=col_rename_map)
-            r_output = r_output.rename(columns=col_rename_map)
-            
-            st.write(f"✅ **Columns renamed:** {len(col_rename_map)} unnamed columns replaced with meaningful names")
-            for old_name, new_name in col_rename_map.items():
-                st.write(f"  {old_name} → {new_name}")
+        # Admin Amount columns
+        nb_output['Admin_3_Amount_Agent_NCB_Fee'] = nb_filtered.iloc[:, 40]  # Column AO
+        nb_output['Admin_4_Amount_Dealer_NCB_Fee'] = nb_filtered.iloc[:, 41]  # Column AQ
+        nb_output['Admin_6_Amount_Agent_NCB_Offset'] = nb_filtered.iloc[:, 46]  # Column AU
+        nb_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 47]  # Column AW
+        nb_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 48]  # Column AY
+        nb_output['Admin_9_Amount_Agent_NCB_Offset'] = nb_filtered.iloc[:, 52]  # Column BA
+        nb_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 53]  # Column BC
+        
+        nb_output['Transaction_Type'] = 'NB'
+        nb_output['Row_Type'] = 'New Business'
     
-    # Add transaction type identifiers
-    nb_output['Transaction_Type'] = 'NB'
-    nb_output['Row_Type'] = 'New Business'
-    c_output['Transaction_Type'] = 'C'
-    c_output['Row_Type'] = 'Cancellation'
-    r_output['Transaction_Type'] = 'R'
-    r_output['Row_Type'] = 'Reinstatement'
+    # Data Set 2 - Reinstatements (R)
+    r_output = pd.DataFrame()
+    if len(r_filtered) > 0:
+        r_output['Insurer_Code'] = r_filtered.iloc[:, 1]  # Column B
+        r_output['Product_Type_Code'] = r_filtered.iloc[:, 2]  # Column C
+        r_output['Coverage_Code'] = r_filtered.iloc[:, 3]  # Column D
+        r_output['Dealer_Number'] = r_filtered.iloc[:, 4]  # Column E
+        r_output['Dealer_Name'] = r_filtered.iloc[:, 5]  # Column F
+        r_output['Contract_Number'] = r_filtered.iloc[:, 7]  # Column H
+        r_output['Contract_Sale_Date'] = r_filtered.iloc[:, 11]  # Column L
+        r_output['Transaction_Date'] = r_filtered.iloc[:, 9]  # Column J
+        r_output['Transaction_Type'] = r_filtered.iloc[:, 12]  # Column M
+        r_output['Customer_Last_Name'] = r_filtered.iloc[:, 20]  # Column U
+        
+        # Admin Amount columns
+        r_output['Admin_3_Amount_Agent_NCB_Fee'] = r_filtered.iloc[:, 40]  # Column AO
+        r_output['Admin_4_Amount_Dealer_NCB_Fee'] = r_filtered.iloc[:, 41]  # Column AQ
+        r_output['Admin_6_Amount_Agent_NCB_Offset'] = r_filtered.iloc[:, 46]  # Column AU
+        r_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = r_filtered.iloc[:, 47]  # Column AW
+        r_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = r_filtered.iloc[:, 48]  # Column AY
+        r_output['Admin_9_Amount_Agent_NCB_Offset'] = r_filtered.iloc[:, 52]  # Column BA
+        r_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = r_filtered.iloc[:, 53]  # Column BC
+        
+        r_output['Transaction_Type'] = 'R'
+        r_output['Row_Type'] = 'Reinstatement'
+    
+    # Data Set 3 - Cancellations (C)
+    c_output = pd.DataFrame()
+    if len(c_filtered) > 0:
+        c_output['Insurer_Code'] = c_filtered.iloc[:, 1]  # Column B
+        c_output['Product_Type_Code'] = c_filtered.iloc[:, 2]  # Column C
+        c_output['Coverage_Code'] = c_filtered.iloc[:, 3]  # Column D
+        c_output['Dealer_Number'] = c_filtered.iloc[:, 4]  # Column E
+        c_output['Dealer_Name'] = c_filtered.iloc[:, 5]  # Column F
+        c_output['Contract_Number'] = c_filtered.iloc[:, 7]  # Column H
+        c_output['Contract_Sale_Date'] = c_filtered.iloc[:, 11]  # Column L
+        c_output['Transaction_Date'] = c_filtered.iloc[:, 9]  # Column J
+        c_output['Transaction_Type'] = c_filtered.iloc[:, 12]  # Column M
+        c_output['Customer_Last_Name'] = c_filtered.iloc[:, 20]  # Column U
+        
+        # Additional columns for cancellations
+        c_output['Contract_Term'] = c_filtered.iloc[:, 25]  # Column Z
+        c_output['Cancellation_Date'] = c_filtered.iloc[:, 30]  # Column AE
+        c_output['Cancellation_Reason'] = c_filtered.iloc[:, 27]  # Column AB
+        c_output['Cancellation_Factor'] = c_filtered.iloc[:, 26]  # Column AA
+        
+        # Admin Amount columns
+        c_output['Admin_3_Amount_Agent_NCB_Fee'] = c_filtered.iloc[:, 40]  # Column AO
+        c_output['Admin_4_Amount_Dealer_NCB_Fee'] = c_filtered.iloc[:, 41]  # Column AQ
+        c_output['Admin_6_Amount_Agent_NCB_Offset'] = c_filtered.iloc[:, 46]  # Column AU
+        c_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = c_filtered.iloc[:, 47]  # Column AW
+        c_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = c_filtered.iloc[:, 48]  # Column AY
+        c_output['Admin_9_Amount_Agent_NCB_Offset'] = c_filtered.iloc[:, 52]  # Column BA
+        c_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = c_filtered.iloc[:, 53]  # Column BC
+        
+        c_output['Transaction_Type'] = 'C'
+        c_output['Row_Type'] = 'Cancellation'
     
     # Create combined output for the main download
     combined_output = pd.concat([nb_output, c_output, r_output], ignore_index=True)
