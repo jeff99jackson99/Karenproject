@@ -20,7 +20,7 @@ def detect_column_structure_v2(excel_file):
         
         # Look for the Col Ref sheet (try different possible names)
         col_ref_sheet = None
-        possible_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref']
+        possible_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref', 'xref', 'Xref']
         
         for sheet_name in excel_data.sheet_names:
             if any(name.lower() in sheet_name.lower() for name in possible_names):
@@ -29,7 +29,26 @@ def detect_column_structure_v2(excel_file):
         
         if not col_ref_sheet:
             st.error(f"❌ Could not find Col Ref sheet. Available sheets: {excel_data.sheet_names}")
-            return {}, {}, {}
+            st.write("🔍 **Looking for alternative reference sheets...**")
+            
+            # Try to find any sheet that might contain column information
+            for sheet_name in excel_data.sheet_names:
+                if not any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'summary']):
+                    st.write(f"🔍 **Checking sheet:** {sheet_name}")
+                    try:
+                        test_df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                        # Look for Admin or NCB content in this sheet
+                        content_str = ' '.join([str(val) for val in test_df.values.flatten() if pd.notna(val)]).upper()
+                        if any(keyword in content_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                            st.write(f"✅ **Found potential reference sheet:** {sheet_name}")
+                            col_ref_sheet = sheet_name
+                            break
+                    except:
+                        continue
+            
+            if not col_ref_sheet:
+                st.error("❌ No suitable reference sheet found. Please ensure your Excel file has a 'Col Ref' sheet or similar.")
+                return {}, {}, {}
         
         st.write(f"✅ **Using reference sheet:** {col_ref_sheet}")
         
@@ -286,16 +305,20 @@ def main():
     - **Cancellation (C)**: Negative/empty/0 values expected
     
     **Column Mapping:** Labels matched to money values dynamically
+    
+    **Reference File:** Uses 'Col Ref' sheet or similar reference sheet for column mapping
     """)
     
     # File uploader
     uploaded_file = st.file_uploader(
-        "📁 Upload Excel file with NCB data and 'Col Ref' sheet",
+        "📁 Upload Excel file with NCB data and reference sheet (Col Ref, xref, etc.)",
         type=['xlsx', 'xls'],
-        help="File should contain data sheet and 'Col Ref' sheet for column mapping"
+        help="File should contain data sheet and a reference sheet (like 'Col Ref' or 'xref') for column mapping. The reference sheet should define Admin columns and their relationships."
     )
     
     if uploaded_file is not None:
+        st.write(f"📁 **File uploaded:** {uploaded_file.name}")
+        
         if st.button("🚀 Process Data (Version 2.0)", type="primary", use_container_width=True):
             
             with st.spinner("🔍 Analyzing file structure..."):
@@ -303,7 +326,8 @@ def main():
                 column_mapping, label_columns, amount_columns = detect_column_structure_v2(uploaded_file)
                 
                 if not column_mapping:
-                    st.error("❌ Could not detect column structure. Please ensure file has 'Col Ref' sheet.")
+                    st.error("❌ Could not detect column structure. Please ensure file has a reference sheet (Col Ref, xref, etc.).")
+                    st.write("💡 **Tip:** Your file should have a sheet that defines the Admin column structure (like 'Col Ref' or 'xref').")
                     return
             
             with st.spinner("📊 Processing data..."):
@@ -311,10 +335,12 @@ def main():
                 try:
                     excel_data = pd.ExcelFile(uploaded_file)
                     
-                    # Find the main data sheet (not Col Ref)
+                    # Find the main data sheet (not the reference sheet)
                     data_sheet = None
+                    reference_sheet_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref', 'xref', 'Xref']
+                    
                     for sheet in excel_data.sheet_names:
-                        if sheet != 'Col Ref' and not any(keyword in sheet.lower() for keyword in ['summary', 'xref', 'ref']):
+                        if not any(ref_name.lower() in sheet.lower() for ref_name in reference_sheet_names) and not any(keyword in sheet.lower() for keyword in ['summary', 'ref']):
                             data_sheet = sheet
                             break
                     
