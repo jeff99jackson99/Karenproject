@@ -650,17 +650,121 @@ def process_data_debug(df):
         # Skip the first row (header) and work with actual data
         data_df = df.iloc[1:].copy()
         
-        # New Business (NB)
-        nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'NB'].copy()
-        st.write(f"  - NB records found: {len(nb_df)}")
+        # DEBUG: Show what's in the transaction column
+        st.write(f"🔍 **DEBUG: Transaction column analysis**")
+        st.write(f"  - Transaction column: {transaction_col}")
+        st.write(f"  - Data shape after skipping header: {data_df.shape}")
         
-        # Cancellations (C)
-        c_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'C'].copy()
-        st.write(f"  - C records found: {len(c_df)}")
+        # Show sample values from transaction column
+        transaction_sample = data_df[transaction_col].dropna().head(20)
+        st.write(f"  - Sample transaction values: {transaction_sample.tolist()}")
         
-        # Reinstatements (R)
-        r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
-        st.write(f"  - R records found: {len(r_df)}")
+        # Show unique values and their counts
+        unique_transactions = data_df[transaction_col].value_counts()
+        st.write(f"  - Unique transaction values and counts:")
+        for val, count in unique_transactions.head(10).items():
+            st.write(f"    '{val}': {count} records")
+        
+        # Check for transaction codes in different formats
+        st.write(f"🔍 **DEBUG: Looking for transaction codes...**")
+        
+        # Try different string formats and case variations
+        nb_count_1 = data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('NB', na=False).sum()
+        c_count_1 = data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('C', na=False).sum()
+        r_count_1 = data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('R', na=False).sum()
+        
+        st.write(f"  - NB count (exact match): {nb_count_1}")
+        st.write(f"  - C count (exact match): {c_count_1}")
+        st.write(f"  - R count (exact match): {r_count_1}")
+        
+        # Try looking for transaction codes in the first few characters
+        nb_count_2 = data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('NB').sum()
+        c_count_2 = data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('C').sum()
+        r_count_2 = data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('R').sum()
+        
+        st.write(f"  - NB count (starts with): {nb_count_2}")
+        st.write(f"  - C count (starts with): {c_count_2}")
+        st.write(f"  - R count (starts with): {r_count_2}")
+        
+        # New Business (NB) - try multiple detection methods
+        nb_df = pd.DataFrame()
+        if nb_count_1 > 0:
+            nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('NB', na=False)].copy()
+            st.write(f"  - NB records found (method 1): {len(nb_df)}")
+        elif nb_count_2 > 0:
+            nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('NB')].copy()
+            st.write(f"  - NB records found (method 2): {len(nb_df)}")
+        else:
+            # Try looking for any column that might contain transaction types
+            st.write(f"  - No NB records found, checking other columns...")
+            for col in df.columns[:20]:  # Check first 20 columns
+                try:
+                    sample_data = data_df[col].dropna().head(100)
+                    str_vals = sample_data.astype(str).str.upper().str.strip()
+                    nb_count = str_vals.str.contains('NB', na=False).sum()
+                    c_count = str_vals.str.contains('C', na=False).sum()
+                    r_count = str_vals.str.contains('R', na=False).sum()
+                    
+                    if nb_count > 0 or c_count > 0 or r_count > 0:
+                        st.write(f"    Column {col}: NB={nb_count}, C={c_count}, R={r_count}")
+                        if nb_count > 0:
+                            st.write(f"    ⚠️ **Found transaction codes in column {col} instead of {transaction_col}**")
+                except:
+                    continue
+        
+        # Cancellations (C) - try multiple detection methods
+        c_df = pd.DataFrame()
+        if c_count_1 > 0:
+            c_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('C', na=False)].copy()
+            st.write(f"  - C records found (method 1): {len(c_df)}")
+        elif c_count_2 > 0:
+            c_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('C')].copy()
+            st.write(f"  - C records found (method 2): {len(c_df)}")
+        
+        # Reinstatements (R) - try multiple detection methods
+        r_df = pd.DataFrame()
+        if r_count_1 > 0:
+            r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('R', na=False)].copy()
+            st.write(f"  - R records found (method 1): {len(r_df)}")
+        elif r_count_2 > 0:
+            r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.startswith('R')].copy()
+            st.write(f"  - R records found (method 2): {len(r_df)}")
+        
+        # If still no records, try a different approach
+        if len(nb_df) == 0 and len(c_df) == 0 and len(r_df) == 0:
+            st.write(f"🔍 **DEBUG: No records found, trying alternative approach...**")
+            
+            # Look for the actual transaction column by examining all columns
+            for col in df.columns:
+                try:
+                    # Skip the header row and look at actual data
+                    sample_data = df[col].iloc[1:].dropna().head(200)
+                    if len(sample_data) > 0:
+                        str_vals = sample_data.astype(str).str.upper().str.strip()
+                        nb_count = str_vals.str.contains('NB', na=False).sum()
+                        c_count = str_vals.str.contains('C', na=False).sum()
+                        r_count = str_vals.str.contains('R', na=False).sum()
+                        
+                        total_transactions = nb_count + c_count + r_count
+                        if total_transactions > 10:  # Need significant number
+                            st.write(f"    ✅ **Found transaction codes in column {col}:**")
+                            st.write(f"      NB={nb_count}, C={c_count}, R={r_count}")
+                            
+                            # Use this column instead
+                            transaction_col = col
+                            st.write(f"    🔄 **Switching to column {col} for transaction filtering**")
+                            
+                            # Re-filter with the correct column
+                            nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('NB', na=False)].copy()
+                            c_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('C', na=False)].copy()
+                            r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip().str.contains('R', na=False)].copy()
+                            
+                            st.write(f"    - NB records found: {len(nb_df)}")
+                            st.write(f"    - C records found: {len(c_df)}")
+                            st.write(f"    - R records found: {len(r_df)}")
+                            break
+                except:
+                    continue
         
         # Apply Admin amount filtering with super smart validation
         st.write("🔄 **Applying Super Smart Admin amount filtering...**")
