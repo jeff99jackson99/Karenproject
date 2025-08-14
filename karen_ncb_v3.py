@@ -69,6 +69,10 @@ def analyze_data_structure_clean(df):
             # Skip the header row and look at actual data
             data_col = df[col].iloc[1:]  # Skip header row
             
+            # Skip datetime columns - they can't be used for Admin amounts
+            if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
+                continue
+            
             # Try to convert to numeric, handling mixed data types
             numeric_data = pd.to_numeric(data_col, errors='coerce')
             
@@ -145,6 +149,11 @@ def analyze_data_structure_clean(df):
             if any(keyword in col_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER', 'FEE', 'AMOUNT']):
                 try:
                     data_col = df[col].iloc[1:]  # Skip header
+                    
+                    # Skip datetime columns
+                    if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
+                        continue
+                        
                     numeric_data = pd.to_numeric(data_col, errors='coerce')
                     if not numeric_data.isna().all():
                         non_zero_count = (numeric_data != 0).sum()
