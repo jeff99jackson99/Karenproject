@@ -352,41 +352,140 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
     if len(df) == 0:
         return pd.DataFrame()
     
+    st.write(f"🔍 **Creating {row_type} output dataframe with {len(df)} rows**")
+    st.write(f"🔍 **Available columns in source data:** {list(df.columns)[:10]}...")  # Show first 10 columns
+    
     # Create new dataframe with exact column order as specified in Karen 2.0 instructions
     output = pd.DataFrame()
     
     # Base columns (same for all transaction types)
     # B – Insurer Code
-    output['Insurer_Code'] = find_column_by_content_karen(df, ['INSURER', 'INSURER CODE'])
+    insurer_col = find_column_by_content_karen(df, ['INSURER', 'INSURER CODE'])
+    if insurer_col is not None and not insurer_col.isna().all():
+        output['Insurer_Code'] = insurer_col
+        st.write(f"✅ **Found Insurer Code column:** {insurer_col.name if hasattr(insurer_col, 'name') else 'Series'}")
+    else:
+        output['Insurer_Code'] = None
+        st.write(f"⚠️ **Insurer Code column not found or empty**")
+    
     # C – Product Type Code
-    output['Product_Type_Code'] = find_column_by_content_karen(df, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+    product_col = find_column_by_content_karen(df, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+    if product_col is not None and not product_col.isna().all():
+        output['Product_Type_Code'] = product_col
+        st.write(f"✅ **Found Product Type Code column:** {product_col.name if hasattr(product_col, 'name') else 'Series'}")
+    else:
+        output['Product_Type_Code'] = None
+        st.write(f"⚠️ **Product Type Code column not found or empty**")
+    
     # D – Coverage Code
-    output['Coverage_Code'] = find_column_by_content_karen(df, ['COVERAGE CODE', 'COVERAGE'])
+    coverage_col = find_column_by_content_karen(df, ['COVERAGE CODE', 'COVERAGE'])
+    if coverage_col is not None and not coverage_col.isna().all():
+        output['Coverage_Code'] = coverage_col
+        st.write(f"✅ **Found Coverage Code column:** {coverage_col.name if hasattr(coverage_col, 'name') else 'Series'}")
+    else:
+        output['Coverage_Code'] = None
+        st.write(f"⚠️ **Coverage Code column not found or empty**")
+    
     # E – Dealer Number
-    output['Dealer_Number'] = find_column_by_content_karen(df, ['DEALER NUMBER', 'DEALER #'])
+    dealer_num_col = find_column_by_content_karen(df, ['DEALER NUMBER', 'DEALER #'])
+    if dealer_num_col is not None and not dealer_num_col.isna().all():
+        output['Dealer_Number'] = dealer_num_col
+        st.write(f"✅ **Found Dealer Number column:** {dealer_num_col.name if hasattr(dealer_num_col, 'name') else 'Series'}")
+    else:
+        output['Dealer_Number'] = None
+        st.write(f"⚠️ **Dealer Number column not found or empty**")
+    
     # F – Dealer Name
-    output['Dealer_Name'] = find_column_by_content_karen(df, ['DEALER NAME', 'DEALER'])
+    dealer_name_col = find_column_by_content_karen(df, ['DEALER NAME', 'DEALER'])
+    if dealer_name_col is not None and not dealer_name_col.isna().all():
+        output['Dealer_Name'] = dealer_name_col
+        st.write(f"✅ **Found Dealer Name column:** {dealer_name_col.name if hasattr(dealer_name_col, 'name') else 'Series'}")
+    else:
+        output['Dealer_Name'] = None
+        st.write(f"⚠️ **Dealer Name column not found or empty**")
+    
     # H – Contract Number
-    output['Contract_Number'] = find_column_by_content_karen(df, ['CONTRACT NUMBER', 'CONTRACT #'])
+    contract_col = find_column_by_content_karen(df, ['CONTRACT NUMBER', 'CONTRACT #'])
+    if contract_col is not None and not contract_col.isna().all():
+        output['Contract_Number'] = contract_col
+        st.write(f"✅ **Found Contract Number column:** {contract_col.name if hasattr(contract_col, 'name') else 'Series'}")
+    else:
+        output['Contract_Number'] = None
+        st.write(f"⚠️ **Contract Number column not found or empty**")
+    
     # L – Contract Sale Date
-    output['Contract_Sale_Date'] = find_column_by_content_karen(df, ['CONTRACT SALE DATE', 'SALE DATE'])
+    sale_date_col = find_column_by_content_karen(df, ['CONTRACT SALE DATE', 'SALE DATE'])
+    if sale_date_col is not None and not sale_date_col.isna().all():
+        output['Contract_Sale_Date'] = sale_date_col
+        st.write(f"✅ **Found Contract Sale Date column:** {sale_date_col.name if hasattr(sale_date_col, 'name') else 'Series'}")
+    else:
+        output['Contract_Sale_Date'] = None
+        st.write(f"⚠️ **Contract Sale Date column not found or empty**")
+    
     # J – Transaction Date
-    output['Transaction_Date'] = find_column_by_content_karen(df, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+    trans_date_col = find_column_by_content_karen(df, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+    if trans_date_col is not None and not trans_date_col.isna().all():
+        output['Transaction_Date'] = trans_date_col
+        st.write(f"✅ **Found Transaction Date column:** {trans_date_col.name if hasattr(trans_date_col, 'name') else 'Series'}")
+    else:
+        output['Transaction_Date'] = None
+        st.write(f"⚠️ **Transaction Date column not found or empty**")
+    
     # M – Transaction Type
-    output['Transaction_Type'] = find_column_by_content_karen(df, ['TRANSACTION TYPE'])
+    trans_type_col = find_column_by_content_karen(df, ['TRANSACTION TYPE'])
+    if trans_type_col is not None and not trans_type_col.isna().all():
+        output['Transaction_Type'] = trans_type_col
+        st.write(f"✅ **Found Transaction Type column:** {trans_type_col.name if hasattr(trans_type_col, 'name') else 'Series'}")
+    else:
+        output['Transaction_Type'] = None
+        st.write(f"⚠️ **Transaction Type column not found or empty**")
+    
     # U – Customer Last Name
-    output['Customer_Last_Name'] = find_column_by_content_karen(df, ['LAST NAME', 'CUSTOMER LAST NAME'])
+    last_name_col = find_column_by_content_karen(df, ['LAST NAME', 'CUSTOMER LAST NAME'])
+    if last_name_col is not None and not last_name_col.isna().all():
+        output['Customer_Last_Name'] = last_name_col
+        st.write(f"✅ **Found Customer Last Name column:** {last_name_col.name if hasattr(last_name_col, 'name') else 'Series'}")
+    else:
+        output['Customer_Last_Name'] = None
+        st.write(f"⚠️ **Customer Last Name column not found or empty**")
     
     # Additional columns for cancellations only
     if include_cancellation_fields:
         # Z – Contract Term
-        output['Contract_Term'] = find_column_by_content_karen(df, ['CONTRACT TERM', 'TERM'])
+        term_col = find_column_by_content_karen(df, ['CONTRACT TERM', 'TERM'])
+        if term_col is not None and not term_col.isna().all():
+            output['Contract_Term'] = term_col
+            st.write(f"✅ **Found Contract Term column:** {term_col.name if hasattr(term_col, 'name') else 'Series'}")
+        else:
+            output['Contract_Term'] = None
+            st.write(f"⚠️ **Contract Term column not found or empty**")
+        
         # AE – Cancellation Date
-        output['Cancellation_Date'] = find_column_by_content_karen(df, ['CANCELLATION DATE', 'CANCEL DATE'])
+        cancel_date_col = find_column_by_content_karen(df, ['CANCELLATION DATE', 'CANCEL DATE'])
+        if cancel_date_col is not None and not cancel_date_col.isna().all():
+            output['Cancellation_Date'] = cancel_date_col
+            st.write(f"✅ **Found Cancellation Date column:** {cancel_date_col.name if hasattr(cancel_date_col, 'name') else 'Series'}")
+        else:
+            output['Cancellation_Date'] = None
+            st.write(f"⚠️ **Cancellation Date column not found or empty**")
+        
         # AB – Cancellation Reason
-        output['Cancellation_Reason'] = find_column_by_content_karen(df, ['CANCELLATION REASON', 'REASON'])
+        reason_col = find_column_by_content_karen(df, ['CANCELLATION REASON', 'REASON'])
+        if reason_col is not None and not reason_col.isna().all():
+            output['Cancellation_Reason'] = reason_col
+            st.write(f"✅ **Found Cancellation Reason column:** {reason_col.name if hasattr(reason_col, 'name') else 'Series'}")
+        else:
+            output['Cancellation_Reason'] = None
+            st.write(f"⚠️ **Cancellation Reason column not found or empty**")
+        
         # AA – Cancellation Factor
-        output['Cancellation_Factor'] = find_column_by_content_karen(df, ['CANCELLATION FACTOR', 'FACTOR'])
+        factor_col = find_column_by_content_karen(df, ['CANCELLATION FACTOR', 'FACTOR'])
+        if factor_col is not None and not factor_col.isna().all():
+            output['Cancellation_Factor'] = factor_col
+            st.write(f"✅ **Found Cancellation Factor column:** {factor_col.name if hasattr(factor_col, 'name') else 'Series'}")
+        else:
+            output['Cancellation_Factor'] = None
+            st.write(f"⚠️ **Cancellation Factor column not found or empty**")
     
     # Admin Amount columns (same for all transaction types)
     # AO – Admin 3 Amount (Agent NCB Fee)
@@ -408,28 +507,66 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
     output['Transaction_Type'] = transaction_type
     output['Row_Type'] = row_type
     
+    st.write(f"✅ **{row_type} output dataframe created with {len(output.columns)} columns**")
+    st.write(f"🔍 **Output columns:** {list(output.columns)}")
+    
     return output
 
 def find_column_by_content_karen(df, search_terms):
     """Find a column by searching for specific content in column names or first few rows."""
+    st.write(f"🔍 **Searching for columns matching:** {search_terms}")
+    
+    # First, try to find by column names
     for col in df.columns:
         col_str = str(col).upper()
-        # Check column name
         for term in search_terms:
             if term.upper() in col_str:
+                st.write(f"✅ **Found column by name:** {col} matches '{term}'")
                 return df[col]
-        
-        # Check first few rows for content
+    
+    # If not found by name, try to find by content in first few rows
+    st.write(f"🔄 **Searching by content in first few rows...**")
+    for col in df.columns:
         try:
-            first_values = df[col].astype(str).str.upper().head(10)
-            for term in search_terms:
-                if any(term.upper() in val for val in first_values):
-                    return df[col]
-        except:
+            # Get first 10 non-null values
+            sample_data = df[col].dropna().head(10)
+            if len(sample_data) > 0:
+                for term in search_terms:
+                    # Check if any of the sample values contain the search term
+                    if any(term.upper() in str(val).upper() for val in sample_data):
+                        st.write(f"✅ **Found column by content:** {col} contains '{term}' in sample data")
+                        return df[col]
+        except Exception as e:
+            st.write(f"⚠️ **Error checking column {col}:** {str(e)}")
             continue
     
-    # If not found, return empty series
-    return pd.Series([None] * len(df))
+    # If still not found, try to find by position (fallback)
+    st.write(f"🔄 **Trying position-based fallback...**")
+    
+    # Common positions for key columns based on typical Excel structure
+    position_mapping = {
+        'INSURER': 1,           # Column B
+        'PRODUCT TYPE': 2,      # Column C
+        'COVERAGE': 3,          # Column D
+        'DEALER NUMBER': 4,     # Column E
+        'DEALER NAME': 5,       # Column F
+        'CONTRACT NUMBER': 7,   # Column H
+        'SALE DATE': 11,        # Column L
+        'TRANSACTION DATE': 9,  # Column J
+        'TRANSACTION TYPE': 12, # Column M
+        'LAST NAME': 20,        # Column U
+    }
+    
+    for term in search_terms:
+        for search_term, pos in position_mapping.items():
+            if term.upper() in search_term.upper():
+                if pos < len(df.columns):
+                    col_name = df.columns[pos]
+                    st.write(f"✅ **Found column by position:** {col_name} at position {pos} for '{term}'")
+                    return df[col_name]
+    
+    st.write(f"❌ **No column found for:** {search_terms}")
+    return None
 
 def create_excel_download_karen_v3(df, sheet_name):
     """Create Excel download for a dataframe with Karen 2.0 formatting."""
