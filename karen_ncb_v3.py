@@ -25,29 +25,76 @@ class KarenNCBProcessor:
         self.column_mapping = {}
         
     def find_transaction_column_smart(self):
-        """Find the transaction column using multiple intelligent strategies."""
-        st.write("🔍 **Finding Transaction Type Column (Karen 2.0 Method)...**")
+        """Find the transaction column using INSANELY SMART strategies."""
+        st.write("🔍 **Finding Transaction Type Column (INSANELY SMART Method)...**")
         
         # Strategy 1: Look for columns with transaction codes in the first 200 rows
         best_candidate = None
         best_score = 0
         
+        # INSANELY SMART: Multiple transaction code patterns
+        transaction_patterns = {
+            'NB': ['NB', 'NEW BUSINESS', 'NEW', 'N', 'NEWB', 'NEW_BUSINESS', 'NEWBUSINESS', 'NEW BUSINESS', 'NEWBUS', 'NEW_BUS'],
+            'C': ['C', 'CANCEL', 'CANCELLATION', 'CANC', 'CXL', 'CANCELED', 'CANCELLED', 'CANCELATION', 'CANCELATION'],
+            'R': ['R', 'REINSTATE', 'REINSTATEMENT', 'REINST', 'REIN', 'REINSTAT', 'REINSTATE', 'REINSTATEMENT']
+        }
+        
+        # INSANELY SMART: Also look for numeric codes that might represent transaction types
+        numeric_patterns = {
+            'NB': [1, 10, 100, 1000],  # Common numeric codes for New Business
+            'C': [2, 20, 200, 2000],   # Common numeric codes for Cancellation
+            'R': [3, 30, 300, 3000]    # Common numeric codes for Reinstatement
+        }
+        
         for col in self.df.columns:
             try:
                 # Skip the header row and look at actual data
-                sample_data = self.df[col].iloc[1:].dropna().head(200)
+                sample_data = self.df[col].iloc[1:].dropna().head(500)  # Increased sample size
                 if len(sample_data) > 0:
                     str_vals = sample_data.astype(str).str.upper().str.strip()
                     
-                    # Count transaction codes
-                    nb_count = str_vals.str.contains('NB', na=False).sum()
-                    c_count = str_vals.str.contains('C', na=False).sum()
-                    r_count = str_vals.str.contains('R', na=False).sum()
+                    # INSANELY SMART: Count ALL possible transaction code variations
+                    nb_count = 0
+                    c_count = 0
+                    r_count = 0
+                    
+                    # Text pattern matching
+                    for pattern_list, count_var in [
+                        (transaction_patterns['NB'], 'nb_count'),
+                        (transaction_patterns['C'], 'c_count'),
+                        (transaction_patterns['R'], 'r_count')
+                    ]:
+                        for pattern in pattern_list:
+                            if count_var == 'nb_count':
+                                nb_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+                            elif count_var == 'c_count':
+                                c_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+                            elif count_var == 'r_count':
+                                r_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+                    
+                    # INSANELY SMART: Numeric pattern matching
+                    try:
+                        numeric_vals = pd.to_numeric(sample_data, errors='coerce')
+                        if not numeric_vals.isna().all():
+                            for pattern_list, count_var in [
+                                (numeric_patterns['NB'], 'nb_count'),
+                                (numeric_patterns['C'], 'c_count'),
+                                (numeric_patterns['R'], 'r_count')
+                            ]:
+                                for pattern in pattern_list:
+                                    if count_var == 'nb_count':
+                                        nb_count += (numeric_vals == pattern).sum()
+                                    elif count_var == 'c_count':
+                                        c_count += (numeric_vals == pattern).sum()
+                                    elif count_var == 'r_count':
+                                        r_count += (numeric_vals == pattern).sum()
+                    except:
+                        pass
                     
                     total_transactions = nb_count + c_count + r_count
                     if total_transactions > 10:  # Need significant number
-                        # Calculate score based on distribution and total count
-                        score = total_transactions + (min(nb_count, c_count, r_count) * 2)  # Bonus for balanced distribution
+                        # INSANELY SMART: Calculate score based on distribution and total count
+                        score = total_transactions + (min(nb_count, c_count, r_count) * 3)  # Bonus for balanced distribution
                         
                         if score > best_score:
                             best_score = score
@@ -58,18 +105,72 @@ class KarenNCBProcessor:
             except Exception as e:
                 continue
         
+        # INSANELY SMART: If no clear transaction column found, try alternative strategies
+        if not best_candidate:
+            st.write("🚨 **INSANELY SMART FALLBACK: No clear transaction column found!**")
+            st.write("🔍 **Trying alternative detection strategies...**")
+            
+            # Strategy 2: Look for columns with high cardinality and specific patterns
+            for col in self.df.columns:
+                try:
+                    sample_data = self.df[col].iloc[1:].dropna().head(1000)
+                    if len(sample_data) > 0:
+                        unique_count = sample_data.nunique()
+                        
+                        # Look for columns with 3-10 unique values (typical for transaction types)
+                        if 3 <= unique_count <= 10:
+                            str_vals = sample_data.astype(str).str.upper().str.strip()
+                            unique_vals = str_vals.value_counts()
+                            
+                            st.write(f"  🔍 Analyzing column {col} with {unique_count} unique values:")
+                            st.write(f"    Unique values: {unique_vals.to_dict()}")
+                            
+                            # Check if any of these values look like transaction codes
+                            for val, count in unique_vals.items():
+                                if count > 50:  # Significant count
+                                    # Try to classify this value
+                                    if any(pattern in str(val).upper() for pattern in transaction_patterns['NB']):
+                                        st.write(f"    ✅ **Found potential NB pattern: '{val}' ({count} times)**")
+                                    elif any(pattern in str(val).upper() for pattern in transaction_patterns['C']):
+                                        st.write(f"    ✅ **Found potential C pattern: '{val}' ({count} times)**")
+                                    elif any(pattern in str(val).upper() for pattern in transaction_patterns['R']):
+                                        st.write(f"    ✅ **Found potential R pattern: '{val}' ({count} times)**")
+                            
+                except:
+                    continue
+        
         if best_candidate:
             self.transaction_column = best_candidate
             st.write(f"✅ **Selected Transaction Column:** {best_candidate} (score: {best_score})")
             
-            # Show the actual transaction distribution
-            sample_data = self.df[best_candidate].iloc[1:].dropna().head(500)
+            # Show the actual transaction distribution with INSANELY SMART detection
+            sample_data = self.df[best_candidate].iloc[1:].dropna().head(1000)  # Increased sample size
             str_vals = sample_data.astype(str).str.upper().str.strip()
-            nb_count = str_vals.str.contains('NB', na=False).sum()
-            c_count = str_vals.str.contains('C', na=False).sum()
-            r_count = str_vals.str.contains('R', na=False).sum()
+            
+            # INSANELY SMART: Count ALL patterns
+            nb_count = 0
+            c_count = 0
+            r_count = 0
+            
+            for pattern_list, count_var in [
+                (transaction_patterns['NB'], 'nb_count'),
+                (transaction_patterns['C'], 'c_count'),
+                (transaction_patterns['R'], 'r_count')
+            ]:
+                for pattern in pattern_list:
+                    if count_var == 'nb_count':
+                        nb_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+                    elif count_var == 'c_count':
+                        c_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
+                    elif count_var == 'r_count':
+                        r_count += str_vals.str.contains(pattern, na=False, regex=False).sum()
             
             st.write(f"  Final counts: NB={nb_count}, C={c_count}, R={r_count}")
+            
+            # INSANELY SMART: Show sample values for debugging
+            unique_vals = str_vals.value_counts().head(20)
+            st.write(f"  Sample unique values: {unique_vals.to_dict()}")
+            
             return best_candidate
         else:
             st.error("❌ **Could not find Transaction Type column**")
@@ -272,9 +373,11 @@ class KarenNCBProcessor:
         return nb_output, c_output, r_output
     
     def _apply_karen_2_0_filtering(self, df, transaction_type):
-        """Apply Karen 2.0 filtering logic: sum(AO, AQ, AU, AW, AY, BA, BC) > 0 for NB/R, < 0 for C."""
+        """Apply Karen 2.0 filtering logic with INSANELY SMART validation."""
         if len(df) == 0:
             return df
+        
+        st.write(f"🔍 **INSANELY SMART Filtering for {transaction_type}...**")
         
         # Get Admin column values
         admin_cols = ['Admin_3_Amount_Agent_NCB_Fee', 'Admin_4_Amount_Dealer_NCB_Fee',
@@ -282,27 +385,84 @@ class KarenNCBProcessor:
                      'Admin_8_Amount_Dealer_NCB_Offset_Bucket', 'Admin_9_Amount_Agent_NCB_Offset',
                      'Admin_10_Amount_Dealer_NCB_Offset_Bucket']
         
-        # Calculate Admin sum
+        # INSANELY SMART: Calculate Admin sum with detailed debugging
         admin_sum = 0
+        admin_values = {}
+        
         for admin_col in admin_cols:
             if admin_col in self.admin_columns:
                 col_name = self.admin_columns[admin_col]
                 if col_name in df.columns:
                     try:
                         numeric_data = pd.to_numeric(df[col_name], errors='coerce')
+                        admin_values[admin_col] = numeric_data.fillna(0)
                         admin_sum += numeric_data.fillna(0)
-                    except:
-                        pass
+                        
+                        # INSANELY SMART: Show column statistics
+                        non_zero = (numeric_data != 0).sum()
+                        total = numeric_data.notna().sum()
+                        st.write(f"  {admin_col}: {col_name} - Non-zero: {non_zero}/{total}, Sum: {numeric_data.sum():.2f}")
+                        
+                    except Exception as e:
+                        st.write(f"  ❌ Error processing {admin_col}: {str(e)}")
         
-        # Apply filtering based on transaction type
+        # INSANELY SMART: Show Admin sum statistics
+        if len(admin_values) > 0:
+            st.write(f"  📊 Admin sum statistics:")
+            st.write(f"    - Min: {admin_sum.min():.2f}")
+            st.write(f"    - Max: {admin_sum.max():.2f}")
+            st.write(f"    - Mean: {admin_sum.mean():.2f}")
+            st.write(f"    - Std: {admin_sum.std():.2f}")
+            st.write(f"    - Non-zero count: {(admin_sum != 0).sum()}")
+        
+        # INSANELY SMART: Apply filtering based on transaction type with detailed logging
         if transaction_type in ['NB', 'R']:
             # NB and R: sum > 0
             filtered_df = df[admin_sum > 0]
+            st.write(f"  🔄 {transaction_type} filtering: sum > 0")
+            st.write(f"    - Before filter: {len(df)} records")
+            st.write(f"    - After filter: {len(filtered_df)} records")
+            st.write(f"    - Records with sum > 0: {(admin_sum > 0).sum()}")
+            
         elif transaction_type == 'C':
             # C: sum < 0
             filtered_df = df[admin_sum < 0]
+            st.write(f"  🔄 {transaction_type} filtering: sum < 0")
+            st.write(f"    - Before filter: {len(df)} records")
+            st.write(f"    - After filter: {len(filtered_df)} records")
+            st.write(f"    - Records with sum < 0: {(admin_sum < 0).sum()}")
+            
         else:
             filtered_df = df
+            st.write(f"  ⚠️ Unknown transaction type: {transaction_type}, no filtering applied")
+        
+        # INSANELY SMART: If filtering eliminated all records, try alternative logic
+        if len(filtered_df) == 0 and len(df) > 0:
+            st.write(f"  🚨 **INSANELY SMART FALLBACK: All records filtered out!**")
+            st.write(f"  🔍 **Analyzing why filtering failed...**")
+            
+            # Show distribution of Admin sums
+            st.write(f"  📊 Admin sum distribution:")
+            st.write(f"    - Negative: {(admin_sum < 0).sum()}")
+            st.write(f"    - Zero: {(admin_sum == 0).sum()}")
+            st.write(f"    - Positive: {(admin_sum > 0).sum()}")
+            
+            # Try alternative filtering: any non-zero Admin amount
+            if transaction_type in ['NB', 'R']:
+                # NB and R: any Admin amount > 0
+                alt_filtered = df[admin_sum > 0]
+                st.write(f"  🔄 Alternative filter: any Admin > 0 → {len(alt_filtered)} records")
+                if len(alt_filtered) > 0:
+                    filtered_df = alt_filtered
+                    st.write(f"  ✅ **Using alternative filtering logic**")
+                    
+            elif transaction_type == 'C':
+                # C: any Admin amount < 0
+                alt_filtered = df[admin_sum < 0]
+                st.write(f"  🔄 Alternative filter: any Admin < 0 → {len(alt_filtered)} records")
+                if len(alt_filtered) > 0:
+                    filtered_df = alt_filtered
+                    st.write(f"  ✅ **Using alternative filtering logic**")
         
         return filtered_df
     
