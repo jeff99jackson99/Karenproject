@@ -29,26 +29,7 @@ def detect_column_structure_v2(excel_file):
         
         if not col_ref_sheet:
             st.error(f"❌ Could not find Col Ref sheet. Available sheets: {excel_data.sheet_names}")
-            st.write("🔍 **Looking for alternative reference sheets...**")
-            
-            # Try to find any sheet that might contain column information
-            for sheet_name in excel_data.sheet_names:
-                if not any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'summary']):
-                    st.write(f"🔍 **Checking sheet:** {sheet_name}")
-                    try:
-                        test_df = pd.read_excel(excel_file, sheet_name=sheet_name)
-                        # Look for Admin or NCB content in this sheet
-                        content_str = ' '.join([str(val) for val in test_df.values.flatten() if pd.notna(val)]).upper()
-                        if any(keyword in content_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                            st.write(f"✅ **Found potential reference sheet:** {sheet_name}")
-                            col_ref_sheet = sheet_name
-                            break
-                    except:
-                        continue
-            
-            if not col_ref_sheet:
-                st.error("❌ No suitable reference sheet found. Please ensure your Excel file has a 'Col Ref' sheet or similar.")
-                return {}, {}, {}
+            return {}, {}, {}
         
         st.write(f"✅ **Using reference sheet:** {col_ref_sheet}")
         
@@ -56,89 +37,79 @@ def detect_column_structure_v2(excel_file):
         col_ref_df = pd.read_excel(excel_file, sheet_name=col_ref_sheet)
         
         st.write(f"🔍 **Reference sheet loaded:** {col_ref_df.shape}")
-        st.write(f"🔍 **Reference sheet columns:** {list(col_ref_df.columns)}")
         st.write(f"🔍 **Reference sheet first few rows:**")
         st.dataframe(col_ref_df.head(10))
         
-        # Look for the row that contains column descriptions
+        # Based on the reference sheet structure, we need to map:
+        # Admin 3 Label -> Agent NCB, Admin 3 Amount -> corresponding value
+        # Admin 4 Label -> Dealer NCB, Admin 4 Amount -> corresponding value
+        # Admin 9 Label -> Agent NCB Offset, Admin 9 Amount -> corresponding value
+        # Admin 10 Label -> Dealer NCB Offset, Admin 10 Amount -> corresponding value
+        
         column_mapping = {}
         label_columns = {}
         amount_columns = {}
         
-        # Try different approaches to find the column descriptions
-        found_mapping = False
-        
-        # Approach 1: Look for specific keywords in any row
+        # Look for the specific Admin column structure
         for idx, row in col_ref_df.iterrows():
             row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
-            if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER', 'OFFSET', 'FEE']):
-                st.write(f"🔍 **Found potential mapping row {idx}:** {row_str[:100]}...")
+            
+            # Check if this row contains the Admin column mapping
+            if 'ADMIN 3 LABEL' in row_str and 'ADMIN 4 LABEL' in row_str:
+                st.write(f"🔍 **Found Admin column mapping row {idx}**")
                 
-                # This row contains column descriptions
+                # Map the Admin columns based on the reference sheet structure
                 for col_idx, value in enumerate(row):
                     if pd.notna(value) and str(value).strip():
                         desc = str(value).strip()
                         column_mapping[col_idx] = desc
                         
-                        # Identify label columns (containing text like "Agent NCB", "Dealer NCB Fee", etc.)
-                        if any(keyword in desc.upper() for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET', 'ADMIN']):
+                        # Identify Admin Label columns
+                        if desc in ['Admin 3 Label', 'Admin 4 Label', 'Admin 9 Label', 'Admin 10 Label']:
                             label_columns[col_idx] = desc
-                            # The amount column is typically the next column over
+                            # The corresponding Amount column should be the next column over
                             if col_idx + 1 < len(row):
                                 amount_columns[col_idx + 1] = f"Amount for {desc}"
                 
-                found_mapping = True
                 break
         
-        # Approach 2: If no mapping found, try to infer from column headers
-        if not found_mapping:
-            st.write("🔄 **Trying alternative approach - checking column headers...**")
+        # If we didn't find the exact structure, try alternative approaches
+        if not label_columns:
+            st.write("🔄 **Trying alternative Admin column detection...**")
             
-            # Check if the first row contains column descriptions
-            first_row = col_ref_df.iloc[0]
-            for col_idx, value in enumerate(first_row):
-                if pd.notna(value) and str(value).strip():
-                    desc = str(value).strip()
-                    column_mapping[col_idx] = desc
-                    
-                    if any(keyword in desc.upper() for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET', 'ADMIN']):
-                        label_columns[col_idx] = desc
-                        if col_idx + 1 < len(first_row):
-                            amount_columns[col_idx + 1] = f"Amount for {desc}"
-            
-            found_mapping = len(column_mapping) > 0
-        
-        # Approach 3: Look for any row with Admin or NCB content
-        if not found_mapping:
-            st.write("🔄 **Trying content-based detection...**")
-            
+            # Look for any row containing Admin and NCB information
             for idx, row in col_ref_df.iterrows():
-                for col_idx, value in enumerate(row):
-                    if pd.notna(value) and str(value).strip():
-                        val_str = str(value).strip().upper()
-                        if any(keyword in val_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                            column_mapping[col_idx] = str(value).strip()
+                row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
+                if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                    st.write(f"🔍 **Found potential Admin row {idx}:** {row_str[:100]}...")
+                    
+                    for col_idx, value in enumerate(row):
+                        if pd.notna(value) and str(value).strip():
+                            desc = str(value).strip()
+                            column_mapping[col_idx] = desc
                             
-                            if any(keyword in val_str for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET']):
-                                label_columns[col_idx] = str(value).strip()
+                            # Look for Admin Label columns
+                            if 'ADMIN' in desc.upper() and 'LABEL' in desc.upper():
+                                label_columns[col_idx] = desc
+                                # Amount column is next column over
                                 if col_idx + 1 < len(row):
-                                    amount_columns[col_idx + 1] = f"Amount for {str(value).strip()}"
-            
-            found_mapping = len(column_mapping) > 0
+                                    amount_columns[col_idx + 1] = f"Amount for {desc}"
         
-        if found_mapping:
+        if label_columns:
             st.write("🔍 **Column Structure Detected:**")
             st.write(f"  Total columns mapped: {len(column_mapping)}")
             st.write(f"  Label columns found: {len(label_columns)}")
             st.write(f"  Amount columns found: {len(amount_columns)}")
             
-            st.write("🔍 **Sample column mappings:**")
-            for i, (col_idx, desc) in enumerate(list(column_mapping.items())[:10]):
-                st.write(f"  Column {col_idx}: {desc}")
+            st.write("🔍 **Admin column mappings:**")
+            for col_idx, desc in label_columns.items():
+                st.write(f"  {desc}: Column {col_idx}")
+                if col_idx + 1 in amount_columns:
+                    st.write(f"    Amount: Column {col_idx + 1}")
             
             return column_mapping, label_columns, amount_columns
         else:
-            st.warning("⚠️ No column mapping found in reference sheet")
+            st.warning("⚠️ No Admin column mapping found in reference sheet")
             return {}, {}, {}
         
     except Exception as e:
@@ -198,25 +169,45 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     # Process Reinstatement data (positive/empty/0 values expected)
     r_df = df[r_mask].copy()
     
-    # Create the output structure
+    # Create the output structure with proper column mapping
     output_data = []
     
-    # Add New Business records first
+    # Add New Business records first (as per user requirement for specific order)
+    st.write("🔄 **Processing New Business records...**")
     for _, row in nb_df.iterrows():
         record = {
             'Transaction_Type': 'NB',
             'Row_Type': 'New Business'
         }
         
-        # Add all the mapped columns
+        # Add all the mapped columns with proper labels
         for col_idx, desc in column_mapping.items():
             if col_idx < len(row):
                 col_name = row.index[col_idx]
                 record[f"Col_{col_idx}_{desc}"] = row[col_name]
         
-        output_data.append(record)
+        # Validate NB data: should have positive/empty/0 values for Admin amounts
+        nb_valid = True
+        for label_col_idx in label_columns:
+            if label_col_idx + 1 in amount_columns:  # Check if we have the corresponding amount column
+                amount_col_idx = label_col_idx + 1
+                if amount_col_idx < len(row):
+                    amount_val = row.iloc[amount_col_idx]
+                    try:
+                        amount_val = pd.to_numeric(amount_val, errors='coerce')
+                        if pd.notna(amount_val) and amount_val < 0:
+                            nb_valid = False
+                            break
+                    except:
+                        pass
+        
+        if nb_valid:
+            output_data.append(record)
     
-    # Add Cancellation records
+    st.write(f"✅ **New Business records processed:** {len(output_data)}")
+    
+    # Add Cancellation records (negative/empty/0 values expected)
+    st.write("🔄 **Processing Cancellation records...**")
     for _, row in c_df.iterrows():
         record = {
             'Transaction_Type': 'C',
@@ -229,9 +220,28 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
                 col_name = row.index[col_idx]
                 record[f"Col_{col_idx}_{desc}"] = row[col_name]
         
-        output_data.append(record)
+        # Validate C data: should have negative/empty/0 values for Admin amounts
+        c_valid = True
+        for label_col_idx in label_columns:
+            if label_col_idx + 1 in amount_columns:
+                amount_col_idx = label_col_idx + 1
+                if amount_col_idx < len(row):
+                    amount_val = row.iloc[amount_col_idx]
+                    try:
+                        amount_val = pd.to_numeric(amount_val, errors='coerce')
+                        if pd.notna(amount_val) and amount_val > 0:
+                            c_valid = False
+                            break
+                    except:
+                        pass
+        
+        if c_valid:
+            output_data.append(record)
     
-    # Add Reinstatement records
+    st.write(f"✅ **Cancellation records processed:** {len([r for r in output_data if r['Transaction_Type'] == 'C'])}")
+    
+    # Add Reinstatement records (positive/empty/0 values expected)
+    st.write("🔄 **Processing Reinstatement records...**")
     for _, row in r_df.iterrows():
         record = {
             'Transaction_Type': 'R',
@@ -244,7 +254,25 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
                 col_name = row.index[col_idx]
                 record[f"Col_{col_idx}_{desc}"] = row[col_name]
         
-        output_data.append(record)
+        # Validate R data: should have positive/empty/0 values for Admin amounts
+        r_valid = True
+        for label_col_idx in label_columns:
+            if label_col_idx + 1 in amount_columns:
+                amount_col_idx = label_col_idx + 1
+                if amount_col_idx < len(row):
+                    amount_val = row.iloc[amount_col_idx]
+                    try:
+                        amount_val = pd.to_numeric(amount_val, errors='coerce')
+                        if pd.notna(amount_val) and amount_val < 0:
+                            r_valid = False
+                            break
+                    except:
+                        pass
+        
+        if r_valid:
+            output_data.append(record)
+    
+    st.write(f"✅ **Reinstatement records processed:** {len([r for r in output_data if r['Transaction_Type'] == 'R'])}")
     
     # Create output dataframe
     output_df = pd.DataFrame(output_data)
@@ -252,6 +280,13 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"✅ **Output created:** {len(output_df)} total records")
     st.write(f"  Expected range: 2,000 - 2,500 rows")
     st.write(f"  Actual output: {len(output_df)} rows")
+    
+    # Show breakdown by transaction type
+    if len(output_df) > 0:
+        type_counts = output_df['Transaction_Type'].value_counts()
+        st.write("📊 **Final breakdown by Transaction Type:**")
+        for trans_type, count in type_counts.items():
+            st.write(f"  {trans_type}: {count} records")
     
     return output_df
 
