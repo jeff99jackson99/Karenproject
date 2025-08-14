@@ -81,6 +81,8 @@ def find_ncb_columns_simple(df):
         46: 'Agent NCB Offset Bucket', # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
         52: 'Agent NCB Offset',   # ADMIN 9 Amount (Agent NCB Offset) - Column 52
         54: 'Dealer NCB Offset Bucket', # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
+        36: 'Admin 1 Amount',     # ADMIN 1 Amount - Column 36 (additional)
+        38: 'Admin 2 Amount',     # ADMIN 2 Amount - Column 38 (additional)
     }
     
     # Map Admin columns by their actual positions
@@ -90,7 +92,7 @@ def find_ncb_columns_simple(df):
             ncb_columns[ncb_type] = col
             st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {pos})")
     
-    # If we don't have enough, try to find additional Admin columns
+    # If we still don't have enough, try to find additional Admin columns
     if len(ncb_columns) < 7:
         st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional Admin columns...**")
         
@@ -217,7 +219,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             required_cols.get('H'), required_cols.get('I'), required_cols.get('J'),
             required_cols.get('K'), ncb_columns.get('Agent NCB Fee'),
             ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
-            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket')
+            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket'),
+            ncb_columns.get('Admin 1 Amount'), ncb_columns.get('Admin 2 Amount')
         ]
         
         # Data Set 2: Reinstatements (R) - same columns as NB
@@ -231,7 +234,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             required_cols.get('K'), required_cols.get('U'), required_cols.get('AA'),
             required_cols.get('AC'), required_cols.get('AB'), ncb_columns.get('Agent NCB Fee'),
             ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
-            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket')
+            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket'),
+            ncb_columns.get('Admin 1 Amount'), ncb_columns.get('Admin 2 Amount')
         ]
         
         # Filter dataframes to only include available columns
@@ -249,9 +253,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
-            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
+            'Admin 10 Amount (Dealer NCB Offset Bucket)', 'Admin 1 Amount', 'Admin 2 Amount'
         ]
         
         r_headers = nb_headers.copy()
@@ -261,9 +264,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Contract Term', 'Cancellation Date', 'Cancellation Reason', 'Cancellation Factor',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
-            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
+            'Admin 10 Amount (Dealer NCB Offset Bucket)', 'Admin 1 Amount', 'Admin 2 Amount'
         ]
         
         # Apply headers
