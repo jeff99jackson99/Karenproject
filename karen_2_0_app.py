@@ -87,13 +87,13 @@ def find_ncb_columns_simple(df):
     # Based on the actual file structure, map Admin columns to NCB types
     # These are the EXACT columns required by Karen 2.0
     admin_mapping = {
-        36: 'AO',  # ADMIN 1 Amount - Column 36
-        38: 'AQ',  # ADMIN 2 Amount - Column 38
-        40: 'AU',  # ADMIN 3 Amount - Column 40
-        42: 'AW',  # ADMIN 4 Amount - Column 42
-        44: 'AY',  # ADMIN 5 Amount - Column 44
-        46: 'BA',  # ADMIN 6 Amount - Column 46
-        48: 'BC',  # ADMIN 7 Amount - Column 48
+        40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
+        42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
+        46: 'AU',  # ADMIN 6 Amount (Agent NCB Offset) - Column 46
+        48: 'AW',  # ADMIN 7 Amount (Agent NCB Offset Bucket) - Column 48
+        50: 'AY',  # ADMIN 8 Amount (Dealer NCB Offset Bucket) - Column 50
+        52: 'BA',  # ADMIN 9 Amount (Agent NCB Offset) - Column 52
+        54: 'BC',  # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
     }
     
     # Map Admin columns by their actual positions
@@ -244,7 +244,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
         
         # Create output dataframes with required columns in correct order
-        # Data Set 1: New Business (NB)
+        # Data Set 1: New Business (NB) - 17 columns in exact order
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
@@ -254,10 +254,17 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
-        # Data Set 2: Reinstatements (R) - same columns as NB
-        r_output_cols = nb_output_cols.copy()
+        # Data Set 2: Reinstatements (R) - 17 columns in exact order
+        r_output_cols = [
+            required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
+            required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
+            ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY'),
+            ncb_columns.get('BA'), ncb_columns.get('BC')
+        ]
         
-        # Data Set 3: Cancellations (C) - additional columns
+        # Data Set 3: Cancellations (C) - 21 columns in exact order
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
@@ -283,7 +290,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
             'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
             'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
@@ -293,7 +300,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer', 'Product Type', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
             'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
             'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
@@ -304,7 +311,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Contract Term', 'Cancellation Date', 'Cancellation Reason', 'Cancellation Factor',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
             'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
             'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
