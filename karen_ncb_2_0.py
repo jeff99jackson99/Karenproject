@@ -209,7 +209,7 @@ def find_transaction_column(df):
     return transaction_col
 
 def process_data_v2(df, column_mapping, label_columns, amount_columns):
-    """Process data according to version 2.0 requirements."""
+    """Process data according to version 2.0 requirements - using working logic from first version."""
     
     # Find transaction column
     transaction_col = find_transaction_column(df)
@@ -229,100 +229,51 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"  Cancellations: {c_mask.sum()}")
     st.write(f"  Reinstatements: {r_mask.sum()}")
     
-    # Process New Business data with the WORKING filtering logic from old version
+    # Process New Business data with the WORKING filtering logic from first version
     nb_df = df[nb_mask].copy()
     
-    # DEBUG: Show what we're working with
-    st.write(f"🔍 **DEBUG INFO:**")
-    st.write(f"  Label columns found: {len(label_columns)}")
-    st.write(f"  Amount columns found: {len(amount_columns)}")
-    st.write(f"  Label columns: {label_columns}")
-    st.write(f"  Amount columns: {amount_columns}")
-    
     # Apply the EXACT filtering logic that was working before (giving ~1200 records)
-    if len(amount_columns) >= 4:
-        # Get the Admin AMOUNT columns (not label columns) - this is the key fix!
-        admin_amount_cols = list(amount_columns.keys())[:4]
-        st.write(f"🔍 **Using Admin AMOUNT columns:** {admin_amount_cols}")
+    # Use the working approach from the first version
+    if len(label_columns) >= 4:
+        # Get the Admin columns in the correct order
+        admin_cols = list(label_columns.keys())[:4]
+        st.write(f"🔍 **Using Admin columns:** {admin_cols}")
         
-        # Convert Admin amount columns to numeric
-        for col in admin_amount_cols:
+        # Convert Admin columns to numeric (this was working in first version)
+        for col in admin_cols:
             nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
         
-        # Calculate Admin sum from AMOUNT columns
-        nb_df['Admin_Sum'] = nb_df[admin_amount_cols].sum(axis=1)
+        # Calculate Admin sum (this was working in first version)
+        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
         
         # Apply the EXACT user requirement: ALL 4 Admin amounts > 0 AND sum > 0
+        # This is the logic that was working and giving ~1200 records
         nb_filtered = nb_df[
             (nb_df['Admin_Sum'] > 0) &
-            (nb_df[admin_amount_cols[0]] > 0) &
-            (nb_df[admin_amount_cols[1]] > 0) &
-            (nb_df[admin_amount_cols[2]] > 0) &
-            (nb_df[admin_amount_cols[3]] > 0)
+            (nb_df[admin_cols[0]] > 0) &
+            (nb_df[admin_cols[1]] > 0) &
+            (nb_df[admin_cols[2]] > 0) &
+            (nb_df[admin_cols[3]] > 0)
         ]
         
-        st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using strict Admin > 0 logic)")
+        st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using working logic from first version)")
         st.write(f"  Expected: ~1200 records")
         st.write(f"  Actual: {len(nb_filtered)} records")
-        
-        # Show filtering breakdown for debugging
-        st.write(f"🔍 **Filtering breakdown:**")
-        st.write(f"  Records with Admin Sum > 0: {(nb_df['Admin_Sum'] > 0).sum()}")
-        st.write(f"  Records with ALL 4 Admin > 0: {len(nb_filtered)}")
-        st.write(f"  Records filtered out: {(nb_df['Admin_Sum'] > 0).sum() - len(nb_filtered)}")
         
     else:
         nb_filtered = nb_df
         st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
-        st.write(f"  Reason: Only found {len(amount_columns)} Admin amount columns, need 4")
-        
-        # DEBUG: Try alternative approach if amount_columns is empty
-        if len(amount_columns) == 0:
-            st.write(f"🔄 **Trying alternative Admin column detection...**")
-            
-            # Look for numeric columns that might be Admin amounts
-            numeric_cols = []
-            for col in nb_df.columns:
-                try:
-                    if pd.api.types.is_numeric_dtype(nb_df[col]) or pd.to_numeric(nb_df[col], errors='coerce').notna().any():
-                        numeric_cols.append(col)
-                except:
-                    pass
-            
-            st.write(f"  Found {len(numeric_cols)} numeric columns: {numeric_cols[:10]}")
-            
-            if len(numeric_cols) >= 4:
-                st.write(f"  Using first 4 numeric columns for filtering")
-                admin_amount_cols = numeric_cols[:4]
-                
-                # Convert to numeric and filter
-                for col in admin_amount_cols:
-                    nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
-                
-                nb_df['Admin_Sum'] = nb_df[admin_amount_cols].sum(axis=1)
-                
-                # Apply filtering
-                nb_filtered = nb_df[
-                    (nb_df['Admin_Sum'] > 0) &
-                    (nb_df[admin_amount_cols[0]] > 0) &
-                    (nb_df[admin_amount_cols[1]] > 0) &
-                    (nb_df[admin_amount_cols[2]] > 0) &
-                    (nb_df[admin_amount_cols[3]] > 0)
-                ]
-                
-                st.write(f"✅ **Alternative filtering applied:** {len(nb_filtered)} records")
-                st.write(f"  Expected: ~1200 records")
-                st.write(f"  Actual: {len(nb_filtered)} records")
+        st.write(f"  Reason: Only found {len(label_columns)} Admin columns, need 4")
     
     # Process Cancellation data (negative/empty/0 values expected)
     c_df = df[c_mask].copy()
     
-    # Apply filtering for cancellations (sum != 0)
-    if len(amount_columns) >= 4:
-        admin_amount_cols = list(amount_columns.keys())[:4]
-        for col in admin_amount_cols:
+    # Apply filtering for cancellations (sum != 0) - this was working
+    if len(label_columns) >= 4:
+        admin_cols = list(label_columns.keys())[:4]
+        for col in admin_cols:
             c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
-        c_df['Admin_Sum'] = c_df[admin_amount_cols].sum(axis=1)
+        c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
         c_filtered = c_df[c_df['Admin_Sum'] != 0]
         st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
     else:
@@ -332,12 +283,12 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     # Process Reinstatement data (positive/empty/0 values expected)
     r_df = df[r_mask].copy()
     
-    # Apply filtering for reinstatements (sum != 0)
-    if len(amount_columns) >= 4:
-        admin_amount_cols = list(amount_columns.keys())[:4]
-        for col in admin_amount_cols:
+    # Apply filtering for reinstatements (sum != 0) - this was working
+    if len(label_columns) >= 4:
+        admin_cols = list(label_columns.keys())[:4]
+        for col in admin_cols:
             r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
-        r_df['Admin_Sum'] = r_df[admin_amount_cols].sum(axis=1)
+        r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
         r_filtered = r_df[r_df['Admin_Sum'] != 0]
         st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
     else:
@@ -349,7 +300,7 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     c_output = c_filtered.copy()
     r_output = r_filtered.copy()
     
-    # Rename columns to be more meaningful
+    # Rename columns to be more meaningful based on the reference sheet structure
     if column_mapping:
         # Create a mapping from column index to meaningful names
         col_rename_map = {}
@@ -357,7 +308,7 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
             if col_idx < len(nb_output.columns):
                 col_name = nb_output.columns[col_idx]
                 if 'Unnamed' in str(col_name):
-                    # Replace unnamed columns with meaningful names
+                    # Replace unnamed columns with meaningful names from reference sheet
                     col_rename_map[col_name] = f"Col_{col_idx}_{desc}"
         
         # Apply column renaming
@@ -385,9 +336,6 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"  New Business: {len(nb_output)} (target: ~1200)")
     st.write(f"  Cancellations: {len(c_output)}")
     st.write(f"  Reinstatements: {len(r_output)}")
-    
-    # Show column information
-    st.write(f"🔍 **Output columns:** {list(combined_output.columns)}")
     
     return {
         'nb_data': nb_output,
