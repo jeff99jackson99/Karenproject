@@ -75,14 +75,15 @@ def find_ncb_columns_simple(df):
     ncb_columns = {}
     
     # Based on the actual file structure, map Admin columns to NCB types
+    # These are the EXACT columns required by Karen 2.0
     admin_mapping = {
-        40: 'Agent NCB Fee',      # ADMIN 3 Amount (Agent NCB) - Column 40
-        42: 'Dealer NCB Fee',     # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
-        46: 'Agent NCB Offset Bucket', # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
-        52: 'Agent NCB Offset',   # ADMIN 9 Amount (Agent NCB Offset) - Column 52
-        54: 'Dealer NCB Offset Bucket', # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
-        36: 'Admin 1 Amount',     # ADMIN 1 Amount - Column 36 (additional)
-        38: 'Admin 2 Amount',     # ADMIN 2 Amount - Column 38 (additional)
+        40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
+        42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
+        46: 'AU',  # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
+        48: 'AW',  # ADMIN 7 Amount (Agent NCB Offset Bucket) - Column 48
+        50: 'AY',  # ADMIN 8 Amount (Dealer NCB Offset Bucket) - Column 50
+        52: 'BA',  # ADMIN 9 Amount (Agent NCB Offset) - Column 52
+        54: 'BC',  # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
     }
     
     # Map Admin columns by their actual positions
@@ -123,28 +124,30 @@ def find_required_columns_simple(df):
     required_cols = {}
     
     # Based on the actual file structure, map column positions to required columns
+    # These are the EXACT columns required by Karen 2.0
     position_mapping = {
-        1: 'Insurer Code',        # Column 1 (B)
-        2: 'Product Type Code',   # Column 2 (C) 
-        3: 'Coverage Code',       # Column 3 (D)
-        4: 'Dealer Number',       # Column 4 (E)
-        5: 'Dealer Name',         # Column 5 (F)
-        6: 'Contract Number',     # Column 6 (G)
-        7: 'Contract Sale Date',  # Column 7 (H)
-        8: 'Transaction Date',    # Column 8 (I)
-        9: 'Transaction Type',    # Column 9 (J) - This contains the dropdown values C, R, NB, A
-        10: 'Customer Last Name', # Column 10 (K)
-        20: 'Contract Term',      # Column 20 (U) - Term Months
-        27: 'Cancellation Factor', # Column 27 (AB)
-        28: 'Cancellation Reason', # Column 28 (AC)
-        26: 'Cancellation Date',  # Column 26 (AA) - Number of Days in Force
+        1: 'B',   # Insurer Code - Column 1
+        2: 'C',   # Product Type Code - Column 2
+        3: 'D',   # Coverage Code - Column 3
+        4: 'E',   # Dealer Number - Column 4
+        5: 'F',   # Dealer Name - Column 5
+        6: 'H',   # Contract Number - Column 6
+        7: 'L',   # Contract Sale Date - Column 7
+        8: 'J',   # Transaction Date - Column 8
+        9: 'M',   # Transaction Type - Column 9 (This contains the dropdown values C, R, NB, A)
+        10: 'U',  # Customer Last Name - Column 10
+        20: 'Z',  # Contract Term - Column 20 (Term Months)
+        26: 'AA', # Cancellation Factor - Column 26 (Number of Days in Force)
+        27: 'AB', # Cancellation Reason - Column 27
+        28: 'AE', # Cancellation Date - Column 28
     }
     
     # Map by position
     for i, col in enumerate(df.columns):
         if i in position_mapping:
-            required_cols[chr(65 + i)] = col  # Convert position to letter (A=0, B=1, etc.)
-            st.write(f"✅ **Found required column:** {chr(65 + i)} ({position_mapping[i]}) → {col}")
+            col_letter = position_mapping[i]
+            required_cols[col_letter] = col
+            st.write(f"✅ **Found required column:** {col_letter} ({col}) → {col}")
     
     return required_cols
 
@@ -172,7 +175,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         df['NCB_Sum'] = df[ncb_cols].sum(axis=1)
         
         # Find transaction type column
-        transaction_col = required_cols.get('J') # Changed from 'M' to 'J'
+        transaction_col = required_cols.get('M') # Transaction Type column
         if not transaction_col:
             st.error("❌ No transaction type column found")
             return None
@@ -215,12 +218,11 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         # Data Set 1: New Business (NB)
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
-            required_cols.get('E'), required_cols.get('F'), required_cols.get('G'),
-            required_cols.get('H'), required_cols.get('I'), required_cols.get('J'),
-            required_cols.get('K'), ncb_columns.get('Agent NCB Fee'),
-            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
-            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket'),
-            ncb_columns.get('Admin 1 Amount'), ncb_columns.get('Admin 2 Amount')
+            required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
+            ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY'),
+            ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
         # Data Set 2: Reinstatements (R) - same columns as NB
@@ -229,13 +231,12 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         # Data Set 3: Cancellations (C) - additional columns
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
-            required_cols.get('E'), required_cols.get('F'), required_cols.get('G'),
-            required_cols.get('H'), required_cols.get('I'), required_cols.get('J'),
-            required_cols.get('K'), required_cols.get('U'), required_cols.get('AA'),
-            required_cols.get('AC'), required_cols.get('AB'), ncb_columns.get('Agent NCB Fee'),
-            ncb_columns.get('Dealer NCB Fee'), ncb_columns.get('Agent NCB Offset Bucket'),
-            ncb_columns.get('Agent NCB Offset'), ncb_columns.get('Dealer NCB Offset Bucket'),
-            ncb_columns.get('Admin 1 Amount'), ncb_columns.get('Admin 2 Amount')
+            required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('U'), required_cols.get('Z'), required_cols.get('AA'),
+            required_cols.get('AB'), required_cols.get('AE'), ncb_columns.get('AO'),
+            ncb_columns.get('AQ'), ncb_columns.get('AU'), ncb_columns.get('AW'),
+            ncb_columns.get('AY'), ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
         # Filter dataframes to only include available columns
@@ -253,19 +254,21 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)', 'Admin 1 Amount', 'Admin 2 Amount'
+            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
+            'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
         r_headers = nb_headers.copy()
         
         c_headers = [
-            'Insurer', 'Product Type', 'Coverage Code', 'Dealer Number', 'Dealer Name',
-            'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
+            'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
+            'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
             'Contract Term', 'Cancellation Date', 'Cancellation Reason', 'Cancellation Factor',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)', 'Admin 1 Amount', 'Admin 2 Amount'
+            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
+            'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
         # Apply headers
