@@ -74,48 +74,86 @@ def find_ncb_columns_simple(df):
     """Find NCB columns by looking for Admin columns based on actual file structure."""
     ncb_columns = {}
     
-    # Based on the actual file structure, map Admin columns to NCB types
-    # These are the EXACT columns required by Karen 2.0
-    admin_mapping = {
-        40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
-        42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
-        46: 'AU',  # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
-        48: 'AW',  # ADMIN 7 Amount (Agent NCB Offset Bucket) - Column 48
-        50: 'AY',  # ADMIN 8 Amount (Dealer NCB Offset Bucket) - Column 50
-        52: 'BA',  # ADMIN 9 Amount (Agent NCB Offset) - Column 52
-        54: 'BC',  # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
-    }
+    # First, let's show all columns that might be Admin/Amount related for debugging
+    st.write("🔍 **Searching for Admin/Amount columns...**")
+    admin_candidates = []
+    for i, col in enumerate(df.columns):
+        col_str = str(col).upper()
+        if any(keyword in col_str for keyword in ['ADMIN', 'AMOUNT', 'NCB', 'FEE', 'OFFSET']):
+            admin_candidates.append((i, col, col_str))
     
-    # Map Admin columns by their actual positions
-    for pos, ncb_type in admin_mapping.items():
-        if pos < len(df.columns):
-            col = df.columns[pos]
-            ncb_columns[ncb_type] = col
-            st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {pos})")
+    st.write(f"🔍 **Found {len(admin_candidates)} potential Admin/Amount columns:**")
+    for pos, col, col_str in admin_candidates[:15]:  # Show first 15
+        st.write(f"  Position {pos}: {col} (Content: {col_str})")
     
-    # If we still don't have enough, try to find additional Admin columns
-    if len(ncb_columns) < 7:
-        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional Admin columns...**")
-        
-        # Look for additional Admin columns that might contain NCB amounts
-        for i, col in enumerate(df.columns):
+    # Let's be more flexible and find Admin columns by content, not just position
+    # Look for columns that contain "ADMIN" and "Amount" in their names
+    for i, col in enumerate(df.columns):
+        col_str = str(col).upper()
+        if 'ADMIN' in col_str and 'AMOUNT' in col_str:
+            # Check if this column has numeric values
             try:
-                if 'ADMIN' in str(col) and 'Amount' in str(col):
-                    # Check if this column has meaningful values
-                    values = df.iloc[1:, i].dropna()  # Skip header row
-                    if len(values) > 0:
-                        numeric_vals = pd.to_numeric(values, errors='coerce')
-                        non_zero = (numeric_vals != 0).sum()
-                        if non_zero > 0 and non_zero < len(values) * 0.9:  # Not all zeros, not all non-zero
-                            # Find a unique name for this Admin column
-                            admin_num = f"Admin_{len(ncb_columns) + 1}"
-                            ncb_columns[admin_num] = col
-                            st.write(f"✅ **Found additional Admin column:** {admin_num} → {col} (Position {i})")
-                            
-                            if len(ncb_columns) >= 7:
-                                break
-            except:
-                pass
+                # Skip the first row (header) and check for numeric values
+                values = df.iloc[1:, i].dropna()
+                if len(values) > 0:
+                    numeric_vals = pd.to_numeric(values, errors='coerce')
+                    non_zero = (numeric_vals != 0).sum()
+                    if non_zero > 0:  # Has some non-zero values
+                        # Map to the required NCB column types
+                        if len(ncb_columns) == 0:
+                            ncb_columns['AO'] = col  # Admin 3 Amount (Agent NCB Fee)
+                        elif len(ncb_columns) == 1:
+                            ncb_columns['AQ'] = col  # Admin 4 Amount (Dealer NCB Fee)
+                        elif len(ncb_columns) == 2:
+                            ncb_columns['AU'] = col  # Admin 6 Amount (Agent NCB Offset)
+                        elif len(ncb_columns) == 3:
+                            ncb_columns['AW'] = col  # Admin 7 Amount (Agent NCB Offset Bucket)
+                        elif len(ncb_columns) == 4:
+                            ncb_columns['AY'] = col  # Admin 8 Amount (Dealer NCB Offset Bucket)
+                        elif len(ncb_columns) == 5:
+                            ncb_columns['BA'] = col  # Admin 9 Amount (Agent NCB Offset)
+                        elif len(ncb_columns) == 6:
+                            ncb_columns['BC'] = col  # Admin 10 Amount (Dealer NCB Offset Bucket)
+                        
+                        st.write(f"✅ **Found NCB column:** {list(ncb_columns.keys())[-1]} → {col} (Position {i})")
+                        
+                        if len(ncb_columns) >= 7:
+                            break
+            except Exception as e:
+                st.write(f"⚠️ **Skipping column {col} due to error:** {e}")
+                continue
+    
+    # If we still don't have enough, try to find additional Admin columns by position
+    if len(ncb_columns) < 7:
+        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Trying position-based mapping...**")
+        
+        # Try some common Admin column positions
+        potential_positions = [40, 42, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70]
+        
+        for pos in potential_positions:
+            if pos < len(df.columns) and len(ncb_columns) < 7:
+                col = df.columns[pos]
+                col_str = str(col).upper()
+                
+                # Check if this looks like an Admin column
+                if 'ADMIN' in col_str or 'AMOUNT' in col_str or 'NCB' in col_str:
+                    # Map to the next available NCB column type
+                    if 'AO' not in ncb_columns:
+                        ncb_columns['AO'] = col
+                    elif 'AQ' not in ncb_columns:
+                        ncb_columns['AQ'] = col
+                    elif 'AU' not in ncb_columns:
+                        ncb_columns['AU'] = col
+                    elif 'AW' not in ncb_columns:
+                        ncb_columns['AW'] = col
+                    elif 'AY' not in ncb_columns:
+                        ncb_columns['AY'] = col
+                    elif 'BA' not in ncb_columns:
+                        ncb_columns['BA'] = col
+                    elif 'BC' not in ncb_columns:
+                        ncb_columns['BC'] = col
+                    
+                    st.write(f"✅ **Found NCB column by position:** {list(ncb_columns.keys())[-1]} → {col} (Position {pos})")
     
     return ncb_columns
 
@@ -123,31 +161,67 @@ def find_required_columns_simple(df):
     """Find required columns by simple position mapping based on actual file structure."""
     required_cols = {}
     
-    # Based on the actual file structure, map column positions to required columns
-    # These are the EXACT columns required by Karen 2.0
-    position_mapping = {
-        1: 'B',   # Insurer Code - Column 1
-        2: 'C',   # Product Type Code - Column 2
-        3: 'D',   # Coverage Code - Column 3
-        4: 'E',   # Dealer Number - Column 4
-        5: 'F',   # Dealer Name - Column 5
-        6: 'H',   # Contract Number - Column 6
-        7: 'L',   # Contract Sale Date - Column 7
-        8: 'J',   # Transaction Date - Column 8
-        9: 'M',   # Transaction Type - Column 9 (This contains the dropdown values C, R, NB, A)
-        10: 'U',  # Customer Last Name - Column 10
-        20: 'Z',  # Contract Term - Column 20 (Term Months)
-        26: 'AA', # Cancellation Factor - Column 26 (Number of Days in Force)
-        27: 'AB', # Cancellation Reason - Column 27
-        28: 'AE', # Cancellation Date - Column 28
-    }
-    
-    # Map by position
+    # Let's be more flexible and find columns by content, not just fixed positions
     for i, col in enumerate(df.columns):
-        if i in position_mapping:
-            col_letter = position_mapping[i]
-            required_cols[col_letter] = col
-            st.write(f"✅ **Found required column:** {col_letter} ({col}) → {col}")
+        col_str = str(col).upper()
+        
+        # Map columns based on content and common patterns
+        if 'INSURER' in col_str or 'INSURANCE' in col_str:
+            required_cols['B'] = col
+        elif 'PRODUCT' in col_str and 'TYPE' in col_str:
+            required_cols['C'] = col
+        elif 'COVERAGE' in col_str:
+            required_cols['D'] = col
+        elif 'DEALER' in col_str and 'NUMBER' in col_str:
+            required_cols['E'] = col
+        elif 'DEALER' in col_str and 'NAME' in col_str:
+            required_cols['F'] = col
+        elif 'CONTRACT' in col_str and 'NUMBER' in col_str:
+            required_cols['H'] = col
+        elif 'SALE' in col_str and 'DATE' in col_str:
+            required_cols['L'] = col
+        elif 'TRANSACTION' in col_str and 'DATE' in col_str:
+            required_cols['J'] = col
+        elif 'TRANSACTION' in col_str and 'TYPE' in col_str:
+            required_cols['M'] = col
+        elif 'CUSTOMER' in col_str and 'LAST' in col_str:
+            required_cols['U'] = col
+        elif 'TERM' in col_str:
+            required_cols['Z'] = col
+        elif 'CANCELLATION' in col_str and 'FACTOR' in col_str:
+            required_cols['AA'] = col
+        elif 'CANCELLATION' in col_str and 'REASON' in col_str:
+            required_cols['AB'] = col
+        elif 'CANCELLATION' in col_str and 'DATE' in col_str:
+            required_cols['AE'] = col
+    
+    # If we still don't have enough, try position-based mapping as fallback
+    if len(required_cols) < 10:
+        st.warning(f"⚠️ **Only found {len(required_cols)} required columns, trying position-based mapping...**")
+        
+        # Fallback to position-based mapping
+        position_mapping = {
+            1: 'B',   # Insurer Code - Column 1
+            2: 'C',   # Product Type Code - Column 2
+            3: 'D',   # Coverage Code - Column 3
+            4: 'E',   # Dealer Number - Column 4
+            5: 'F',   # Dealer Name - Column 5
+            6: 'H',   # Contract Number - Column 6
+            7: 'L',   # Contract Sale Date - Column 7
+            8: 'J',   # Transaction Date - Column 8
+            9: 'M',   # Transaction Type - Column 9
+            10: 'U',  # Customer Last Name - Column 10
+            20: 'Z',  # Contract Term - Column 20
+            26: 'AA', # Cancellation Factor - Column 26
+            27: 'AB', # Cancellation Reason - Column 27
+            28: 'AE', # Cancellation Date - Column 28
+        }
+        
+        for pos, col_letter in position_mapping.items():
+            if pos < len(df.columns) and col_letter not in required_cols:
+                col = df.columns[pos]
+                required_cols[col_letter] = col
+                st.write(f"✅ **Found required column by position:** {col_letter} → {col} (Position {pos})")
     
     return required_cols
 
@@ -186,15 +260,31 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         unique_transactions = df[transaction_col].astype(str).unique()
         st.write(f"🔍 **Unique transaction values found:** {unique_transactions[:20]}")
         
+        # More flexible transaction type filtering - look for variations
         # Filter by transaction type and NCB amounts according to Karen 2.0 rules
-        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
-        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
-        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
+        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW', 'NEW BUSINESS', 'N'])
+        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL', 'CANCELLED', 'CANC'])
+        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE', 'REINSTATED'])
+        
+        # Also check for any other transaction types that might exist
+        other_mask = ~(nb_mask | c_mask | r_mask)
+        other_transactions = df[other_mask][transaction_col].astype(str).unique()
+        if len(other_transactions) > 0:
+            st.write(f"🔍 **Other transaction types found:** {other_transactions[:10]}")
         
         st.write(f"📊 **Transaction counts:**")
         st.write(f"  New Business: {nb_mask.sum()}")
         st.write(f"  Cancellations: {c_mask.sum()}")
         st.write(f"  Reinstatements: {r_mask.sum()}")
+        st.write(f"  Other/Unknown: {other_mask.sum()}")
+        
+        # Show sample values from each transaction type
+        if nb_mask.sum() > 0:
+            st.write(f"🔍 **Sample NB transactions:** {df[nb_mask][transaction_col].astype(str).unique()[:5]}")
+        if c_mask.sum() > 0:
+            st.write(f"🔍 **Sample C transactions:** {df[c_mask][transaction_col].astype(str).unique()[:5]}")
+        if r_mask.sum() > 0:
+            st.write(f"🔍 **Sample R transactions:** {df[r_mask][transaction_col].astype(str).unique()[:5]}")
         
         # Apply Karen 2.0 filtering rules
         # Data Set 1 (NB): sum > 0
@@ -208,6 +298,18 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         # Data Set 3 (C): sum < 0
         c_df = df[c_mask].copy()
         c_filtered = c_df[c_df['NCB_Sum'] < 0]
+        
+        # Debug: Show NCB sum distribution for each transaction type
+        st.write(f"🔍 **NCB Sum Analysis:**")
+        if len(nb_df) > 0:
+            st.write(f"  NB NCB Sum range: {nb_df['NCB_Sum'].min():.2f} to {nb_df['NCB_Sum'].max():.2f}")
+            st.write(f"  NB NCB Sum > 0: {(nb_df['NCB_Sum'] > 0).sum()}")
+        if len(r_df) > 0:
+            st.write(f"  R NCB Sum range: {r_df['NCB_Sum'].min():.2f} to {r_df['NCB_Sum'].max():.2f}")
+            st.write(f"  R NCB Sum > 0: {(r_df['NCB_Sum'] > 0).sum()}")
+        if len(c_df) > 0:
+            st.write(f"  C NCB Sum range: {c_df['NCB_Sum'].min():.2f} to {c_df['NCB_Sum'].max():.2f}")
+            st.write(f"  C NCB Sum < 0: {(c_df['NCB_Sum'] < 0).sum()}")
         
         st.write(f"📊 **Filtered results (Karen 2.0 rules):**")
         st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
