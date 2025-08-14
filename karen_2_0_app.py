@@ -330,18 +330,88 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             st.write(f"  Sum > 0: {(nb_df['NCB_Sum'] > 0).sum()}")
             st.write(f"  Sum = 0: {(nb_df['NCB_Sum'] == 0).sum()}")
             st.write(f"  Sum < 0: {(nb_df['NCB_Sum'] < 0).sum()}")
+            
+            # Show sample NCB sums
+            st.write(f"🔍 **Sample NB NCB sums:**")
+            sample_sums = nb_df['NCB_Sum'].head(10).tolist()
+            st.write(f"  First 10: {sample_sums}")
         
         if len(c_df) > 0:
             st.write(f"🔍 **C NCB sum distribution:**")
             st.write(f"  Sum > 0: {(c_df['NCB_Sum'] > 0).sum()}")
             st.write(f"  Sum = 0: {(c_df['NCB_Sum'] == 0).sum()}")
             st.write(f"  Sum < 0: {(c_df['NCB_Sum'] < 0).sum()}")
+            
+            # Show sample NCB sums
+            st.write(f"🔍 **Sample C NCB sums:**")
+            sample_sums = c_df['NCB_Sum'].head(10).tolist()
+            st.write(f"  First 10: {sample_sums}")
         
         if len(r_df) > 0:
             st.write(f"🔍 **R NCB sum distribution:**")
             st.write(f"  Sum > 0: {(r_df['NCB_Sum'] > 0).sum()}")
             st.write(f"  Sum = 0: {(r_df['NCB_Sum'] == 0).sum()}")
             st.write(f"  Sum < 0: {(r_df['NCB_Sum'] < 0).sum()}")
+            
+            # Show sample NCB sums
+            st.write(f"🔍 **Sample R NCB sums:**")
+            sample_sums = r_df['NCB_Sum'].head(10).tolist()
+            st.write(f"  First 10: {sample_sums}")
+        
+        # Debug: Check if NCB columns contain valid data
+        st.write(f"🔍 **NCB Column Data Check:**")
+        ncb_cols = list(ncb_columns.values())
+        for col_name in ncb_cols:
+            if col_name in df.columns:
+                # Get sample values from this column
+                sample_vals = df[col_name].dropna().head(5).tolist()
+                st.write(f"  {col_name}: Sample values = {sample_vals}")
+                
+                # Check if column has non-zero values
+                try:
+                    numeric_vals = pd.to_numeric(df[col_name], errors='coerce')
+                    non_zero_count = (numeric_vals != 0).sum()
+                    total_count = len(numeric_vals.dropna())
+                    st.write(f"    Non-zero: {non_zero_count}/{total_count} ({non_zero_count/total_count*100:.1f}%)")
+                except:
+                    st.write(f"    Could not analyze numeric values")
+            else:
+                st.write(f"  ❌ {col_name}: Column not found in DataFrame")
+        
+        # Debug: Check transaction type values
+        st.write(f"🔍 **Transaction Type Values Check:**")
+        if transaction_col in df.columns:
+            unique_transactions = df[transaction_col].astype(str).unique()
+            st.write(f"  Unique transaction types: {unique_transactions}")
+            
+            # Count each transaction type
+            for trans_type in unique_transactions:
+                count = (df[transaction_col].astype(str) == trans_type).sum()
+                st.write(f"    {trans_type}: {count}")
+        else:
+            st.write(f"  ❌ Transaction column not found")
+        
+        # Debug: Check if filtering masks are working
+        st.write(f"🔍 **Filtering Mask Results:**")
+        st.write(f"  NB mask sum: {nb_mask.sum()}")
+        st.write(f"  C mask sum: {c_mask.sum()}")
+        st.write(f"  R mask sum: {r_mask.sum()}")
+        
+        # Debug: Check if NCB sum calculation is working
+        st.write(f"🔍 **NCB Sum Calculation Check:**")
+        if len(nb_df) > 0:
+            st.write(f"  NB DataFrame created: {nb_df.shape}")
+            st.write(f"  NCB columns used: {ncb_cols}")
+            
+            # Check if NCB_Sum column was created
+            if 'NCB_Sum' in nb_df.columns:
+                st.write(f"  NCB_Sum column created successfully")
+                st.write(f"  NCB_Sum data type: {nb_df['NCB_Sum'].dtype}")
+                st.write(f"  NCB_Sum sample values: {nb_df['NCB_Sum'].head().tolist()}")
+            else:
+                st.write(f"  ❌ NCB_Sum column not created")
+        else:
+            st.write(f"  ❌ NB DataFrame is empty")
         
         # Create output dataframes with required columns in correct order
         # Data Set 1: New Business (NB) - 17 columns in exact order
@@ -795,9 +865,9 @@ def main():
                     
                     # Show expected output information
                     st.subheader("📋 Expected Output - Karen 2.0")
-                    st.write("**Data Set 1 - New Business (NB):** New contracts with NCB sum > 0")
-                    st.write("**Data Set 2 - Reinstatements (R):** Reinstated records with NCB sum > 0")
-                    st.write("**Data Set 3 - Cancellations (C):** Cancelled records with NCB sum < 0")
+                    st.write("**Data Set 1 - New Business (NB):** New contracts with NCB sum >= 0")
+                    st.write("**Data Set 2 - Reinstatements (R):** Reinstated records with NCB sum >= 0")
+                    st.write("**Data Set 3 - Cancellations (C):** Cancelled records with NCB sum <= 0")
                     st.write(f"**Total expected rows:** 2,000-2,500 (Current: {results['total_records']})")
                     
                     # Show sample data
