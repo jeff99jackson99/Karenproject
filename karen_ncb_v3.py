@@ -131,8 +131,13 @@ def analyze_data_structure_debug(df):
                 st.write(f"❌ **REJECTED: column name contains month pattern**")
                 is_datetime = True
             elif ':' in col_str and any(char.isdigit() for char in col_str):
-                st.write(f"❌ **REJECTED: column name contains time pattern**")
-                is_datetime = True
+                # More specific time pattern detection - avoid rejecting "Unnamed: X"
+                if not col_str.startswith('Unnamed:') and not col_str.startswith('Col_'):
+                    # Check if it looks like actual time (HH:MM:SS or similar)
+                    time_parts = col_str.split(':')
+                    if len(time_parts) >= 2 and all(part.strip().isdigit() for part in time_parts[:2]):
+                        st.write(f"❌ **REJECTED: column name contains time pattern**")
+                        is_datetime = True
             
             # Check sample data for datetime patterns
             sample_str = str(data_col.head(10).tolist())
