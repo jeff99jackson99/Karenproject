@@ -22,7 +22,8 @@ def analyze_data_structure_clean(df):
     for col in df.columns:
         try:
             # Get sample data and check for transaction types
-            sample_data = df[col].dropna().head(100)
+            # Skip the first row (header) and look at actual data
+            sample_data = df[col].dropna().iloc[1:].head(100)  # Skip header row
             if len(sample_data) > 0:
                 # Convert to string and check for NB, C, R
                 str_vals = [str(val).upper().strip() for val in sample_data]
@@ -34,6 +35,7 @@ def analyze_data_structure_clean(df):
                     transaction_col = col
                     st.write(f"✅ **Found Transaction Type column:** {col}")
                     st.write(f"   Sample counts: NB={nb_count}, C={c_count}, R={r_count}")
+                    st.write(f"   Sample values: {list(set(str_vals))[:10]}")
                     break
         except Exception as e:
             continue
@@ -43,8 +45,10 @@ def analyze_data_structure_clean(df):
         st.write("🔍 **Available columns and their sample values:**")
         for i, col in enumerate(df.columns[:15]):  # Show first 15 columns
             try:
-                sample_vals = df[col].dropna().head(3).tolist()
-                st.write(f"  Column {i}: {col} → Sample: {sample_vals}")
+                # Show both header and sample data
+                header_val = df[col].iloc[0] if len(df) > 0 else 'No data'
+                sample_vals = df[col].dropna().iloc[1:].head(3).tolist()
+                st.write(f"  Column {i}: {col} → Header: '{header_val}' → Sample: {sample_vals}")
             except:
                 st.write(f"  Column {i}: {col} → Error reading data")
         return None
@@ -263,19 +267,22 @@ def process_data_clean(df):
         st.write(f"  - Transaction column: {transaction_col}")
         st.write(f"  - Admin columns: {admin_cols}")
         
-        # Filter by transaction type
+        # Filter by transaction type - skip the header row
         st.write("🔄 **Filtering data by transaction type...**")
         
+        # Skip the first row (header) and work with actual data
+        data_df = df.iloc[1:].copy()  # Skip header row
+        
         # New Business (NB)
-        nb_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'NB'].copy()
+        nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'NB'].copy()
         st.write(f"  - NB records found: {len(nb_df)}")
         
         # Cancellations (C)
-        c_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'C'].copy()
+        c_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'C'].copy()
         st.write(f"  - C records found: {len(c_df)}")
         
         # Reinstatements (R)
-        r_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
+        r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
         st.write(f"  - R records found: {len(r_df)}")
         
         # Apply Admin amount filtering
