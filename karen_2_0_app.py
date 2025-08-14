@@ -342,118 +342,96 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         st.write("🔍 **Running hidden debugger to find optimal filtering approach...**")
         debug_results = hidden_debugger(df, ncb_columns, required_cols, transaction_col)
         
-        if debug_results['success']:
-            st.success(f"🎯 **Hidden debugger found working approach: {debug_results['working_approach']['name']}**")
-            st.write(f"✅ **Expected results:** NB: {debug_results['final_counts']['nb']}, R: {debug_results['final_counts']['r']}, C: {debug_results['final_counts']['c']}")
-            
-            # Use the working data from debugger
-            nb_filtered = debug_results['working_filtered_data']['nb']
-            r_filtered = debug_results['working_filtered_data']['r']
-            c_filtered = debug_results['working_filtered_data']['c']
-            
+        # FORCE CORRECT KAREN 2.0 APPROACH - BYPASS DEBUGGER
+        st.write("🎯 **FORCING CORRECT KAREN 2.0 FILTERING RULES (BYPASSING DEBUGGER)**")
+        st.write("  - New Business (NB): Admin_Sum > 0 (strictly positive)")
+        st.write("  - Reinstatements (R): Admin_Sum > 0 (strictly positive)")
+        st.write("  - Cancellations (C): Admin_Sum < 0 (strictly negative)")
+        
+        # Apply CORRECT Karen 2.0 filtering rules directly
+        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
+        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
+        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
+        
+        nb_df = df[nb_mask].copy()
+        c_df = df[c_mask].copy()
+        r_df = df[r_mask].copy()
+        
+        # Calculate Admin sum
+        ncb_cols = list(ncb_columns.values())
+        df_copy = df.copy()
+        
+        for col in ncb_cols:
+            if col in df_copy.columns:
+                df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0)
+        
+        df_copy['Admin_Sum'] = df_copy[ncb_cols].fillna(0).sum(axis=1)
+        
+        # Apply CORRECT Karen 2.0 filtering (strict >0/<0) - NO FALLBACK
+        nb_filtered = nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)]
+        r_filtered = r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)]
+        c_filtered = c_df[c_df.index.isin(df_copy[df_copy['Admin_Sum'] < 0].index)]
+        
+        st.write(f"📊 **CORRECT Karen 2.0 filtering results (FORCED):**")
+        st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
+        st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
+        st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
+        st.write(f"  Total: {len(nb_filtered) + len(r_filtered) + len(c_filtered)}")
+        
+        # Check if we're in the expected range
+        total_records = len(nb_filtered) + len(r_filtered) + len(c_filtered)
+        if total_records >= 2000 and total_records <= 2500:
+            st.success(f"🎯 **PERFECT! Total records ({total_records}) within expected range (2,000-2,500)**")
         else:
-            st.warning("⚠️ **Hidden debugger couldn't find optimal approach, running continuous testing...**")
-            
-            # Run continuous testing until we get expected results
-            st.write("🔄 **Running continuous testing until success (2,000-2,500 total records)...**")
-            
-            # Run continuous testing in background (this will print to console)
-            continuous_results = continuous_testing_until_success(df, ncb_columns, required_cols, transaction_col)
-            
-            if continuous_results['success']:
-                st.success(f"🎯 **Continuous testing SUCCESS!** Strategy: {continuous_results['strategy']['name']}")
-                st.write(f"✅ **Found working approach after {continuous_results['rounds_tested']} test rounds**")
-                
-                # Use the working data from continuous testing
-                nb_filtered = continuous_results['filtered_data']['nb']
-                r_filtered = continuous_results['filtered_data']['r']
-                c_filtered = continuous_results['filtered_data']['c']
-                
-                st.write(f"📊 **Final results:** NB: {len(nb_filtered)}, R: {len(r_filtered)}, C: {len(c_filtered)}")
-                
-            else:
-                st.error("❌ **Continuous testing failed, using CORRECT Karen 2.0 filtering rules**")
-                
-                # Apply CORRECT Karen 2.0 filtering rules (not the working approach)
-                st.write("🔍 **Applying CORRECT Karen 2.0 filtering rules:**")
-                st.write("  - New Business (NB): Admin_Sum > 0 (strictly positive)")
-                st.write("  - Reinstatements (R): Admin_Sum > 0 (strictly positive)")
-                st.write("  - Cancellations (C): Admin_Sum < 0 (strictly negative)")
-                
-                # Filter by transaction type
-                nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
-                c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
-                r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
-                
-                nb_df = df[nb_mask].copy()
-                c_df = df[c_mask].copy()
-                r_df = df[r_mask].copy()
-                
-                # Calculate Admin sum
-                ncb_cols = list(ncb_columns.values())
-                df_copy = df.copy()
-                
-                for col in ncb_cols:
-                    if col in df_copy.columns:
-                        df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0)
-                
-                df_copy['Admin_Sum'] = df_copy[ncb_cols].fillna(0).sum(axis=1)
-                
-                # Apply CORRECT Karen 2.0 filtering (strict >0/<0)
-                nb_filtered = nb_df[nb_df['Admin_Sum'] > 0]   # Changed from >= 0 to > 0
-                r_filtered = r_df[r_df['Admin_Sum'] > 0]      # Changed from >= 0 to > 0
-                c_filtered = c_df[c_df['Admin_Sum'] < 0]      # Changed from <= 0 to < 0
-                
-                st.write(f"📊 **CORRECT Karen 2.0 filtering results:**")
-                st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
-                st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
-                st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
-                st.write(f"  Total: {len(nb_filtered) + len(r_filtered) + len(c_filtered)}")
-                
-                # Check if we're in the expected range
-                total_records = len(nb_filtered) + len(r_filtered) + len(c_filtered)
-                if total_records >= 2000 and total_records <= 2500:
-                    st.success(f"🎯 **PERFECT! Total records ({total_records}) within expected range (2,000-2,500)**")
-                else:
-                    st.warning(f"⚠️ **Total records ({total_records}) outside expected range (2,000-2,500)**")
-                    st.write("  This suggests the data may need different filtering criteria")
+            st.warning(f"⚠️ **Total records ({total_records}) outside expected range (2,000-2,500)**")
+            st.write("  This suggests the data may need different filtering criteria")
+        
+        # Show Admin sum statistics for debugging
+        st.write(f"🔍 **Admin sum statistics:**")
+        st.write(f"  Min: {df_copy['Admin_Sum'].min()}")
+        st.write(f"  Max: {df_copy['Admin_Sum'].max()}")
+        st.write(f"  Mean: {df_copy['Admin_Sum'].mean():.2f}")
+        st.write(f"  Non-zero count: {(df_copy['Admin_Sum'] != 0).sum()}")
+        st.write(f"  Zero count: {(df_copy['Admin_Sum'] == 0).sum()}")
+        st.write(f"  Positive count: {(df_copy['Admin_Sum'] > 0).sum()}")
+        st.write(f"  Negative count: {(df_copy['Admin_Sum'] < 0).sum()}")
+        
+        # Show transaction type counts for debugging
+        st.write(f"🔍 **Transaction type counts:**")
+        st.write(f"  New Business records: {len(nb_df)}")
+        st.write(f"  Cancellation records: {len(c_df)}")
+        st.write(f"  Reinstatement records: {len(r_df)}")
+        
+        # Show how many of each transaction type meet the filtering criteria
+        nb_positive = len(nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)])
+        r_positive = len(r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)])
+        c_negative = len(c_df[c_df.index.isin(df_copy[df_copy['Admin_Sum'] < 0].index)])
+        
+        st.write(f"🔍 **Records meeting filtering criteria:**")
+        st.write(f"  NB with Admin_Sum > 0: {nb_positive}")
+        st.write(f"  R with Admin_Sum > 0: {r_positive}")
+        st.write(f"  C with Admin_Sum < 0: {c_negative}")
         
         st.write(f"✅ **Transaction column found:** {transaction_col}")
         
-        # Apply filtering using the working approach (much more flexible)
-        st.write(f"🔍 **Using Working Approach Filtering (Flexible):**")
-        
-        if len(nb_df) > 0:
-            nb_filtered = nb_df[nb_df['Admin_Sum'] >= 0]
-            st.write(f"  NB filtered (sum >= 0): {len(nb_filtered)}")
-        else:
-            nb_filtered = nb_df
-        
-        if len(c_df) > 0:
-            c_filtered = c_df[c_df['Admin_Sum'] <= 0]
-            st.write(f"  C filtered (sum <= 0): {len(c_filtered)}")
-        else:
-            c_filtered = c_df
-        
-        if len(r_df) > 0:
-            r_filtered = r_df[r_df['Admin_Sum'] >= 0]
-            st.write(f"  R filtered (sum >= 0): {len(r_filtered)}")
-        else:
-            r_filtered = r_df
-        
-        st.write(f"📊 **Final filtered results (Working approach):**")
-        st.write(f"  New Business (sum >= 0): {len(nb_filtered)}")
-        st.write(f"  Reinstatements (sum >= 0): {len(r_filtered)}")
-        st.write(f"  Cancellations (sum <= 0): {len(c_filtered)}")
+        # The filtering has already been applied above with CORRECT Karen 2.0 rules
+        # No need for additional filtering logic here
         
         # Show sample data for debugging
         st.write(f"🔍 **Sample data check:**")
         if len(nb_filtered) > 0:
-            st.write(f"  NB sample Admin_Sum values: {nb_filtered['Admin_Sum'].head(5).tolist()}")
+            # Get Admin_Sum values from the main dataframe using the filtered indices
+            nb_indices = nb_filtered.index
+            nb_admin_sums = df_copy.loc[nb_indices, 'Admin_Sum'].head(5).tolist()
+            st.write(f"  NB sample Admin_Sum values: {nb_admin_sums}")
         if len(r_filtered) > 0:
-            st.write(f"  R sample Admin_Sum values: {r_filtered['Admin_Sum'].head(5).tolist()}")
+            r_indices = r_filtered.index
+            r_admin_sums = df_copy.loc[r_indices, 'Admin_Sum'].head(5).tolist()
+            st.write(f"  R sample Admin_Sum values: {r_admin_sums}")
         if len(c_filtered) > 0:
-            st.write(f"  C sample Admin_Sum values: {c_filtered['Admin_Sum'].head(5).tolist()}")
+            c_indices = c_filtered.index
+            c_admin_sums = df_copy.loc[c_indices, 'Admin_Sum'].head(5).tolist()
+            st.write(f"  C sample Admin_Sum values: {c_admin_sums}")
         
         # Check if we have any results
         total_filtered = len(nb_filtered) + len(r_filtered) + len(c_filtered)
@@ -462,8 +440,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
             st.write("🔍 **Debugging info:**")
             st.write(f"  Total records before filtering: {len(df)}")
             st.write(f"  Transaction column values: {df[transaction_col].value_counts().head(10).to_dict()}")
-            st.write(f"  Admin_Sum range: {df['Admin_Sum'].min()} to {df['Admin_Sum'].max()}")
-            st.write(f"  Admin_Sum non-zero count: {(df['Admin_Sum'] != 0).sum()}")
+            st.write(f"  Admin_Sum range: {df_copy['Admin_Sum'].min()} to {df_copy['Admin_Sum'].max()}")
+            st.write(f"  Admin_Sum non-zero count: {(df_copy['Admin_Sum'] != 0).sum()}")
             return
         
         # CRITICAL DEBUGGING: Show exactly what's happening at each step
