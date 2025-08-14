@@ -134,6 +134,15 @@ def detect_column_structure_v2(excel_file):
                 if col_idx + 1 in amount_columns:
                     st.write(f"    Amount: Column {col_idx + 1}")
             
+            # Show sample of the actual data structure
+            st.write("🔍 **Sample data structure from reference sheet:**")
+            sample_data = []
+            for col_idx in sorted(label_columns.keys()):
+                if col_idx < len(col_ref_df.columns):
+                    col_name = col_ref_df.columns[col_idx]
+                    sample_data.append(f"Col{col_idx}({col_name}): {label_columns[col_idx]}")
+            st.write("  " + " | ".join(sample_data))
+            
             return column_mapping, label_columns, amount_columns
         else:
             st.warning("⚠️ No Admin column mapping found in reference sheet")
@@ -152,6 +161,23 @@ def detect_column_structure_v2(excel_file):
                         row_data.append(f"Col{j}:{str(val).strip()}")
                 if row_data:
                     st.write(f"  Row {i}: {' | '.join(row_data[:10])}")
+            
+            # Try to find any Admin-related content
+            st.write("🔍 **Searching for Admin content in all cells...**")
+            admin_content = []
+            for i in range(min(10, len(col_ref_df))):
+                for j, val in enumerate(col_ref_df.iloc[i]):
+                    if pd.notna(val) and str(val).strip():
+                        val_str = str(val).strip().upper()
+                        if any(keyword in val_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                            admin_content.append(f"Row{i}Col{j}: {str(val).strip()}")
+            
+            if admin_content:
+                st.write("🔍 **Found Admin-related content:**")
+                for content in admin_content[:20]:  # Show first 20
+                    st.write(f"  {content}")
+            else:
+                st.write("❌ **No Admin-related content found in reference sheet**")
             
             return {}, {}, {}
         
@@ -265,10 +291,31 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
         r_filtered = r_df
         st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
     
-    # Create separate dataframes for each transaction type (as in old format)
+    # Create separate dataframes for each transaction type with proper column naming
     nb_output = nb_filtered.copy()
     c_output = c_filtered.copy()
     r_output = r_filtered.copy()
+    
+    # Rename columns to be more meaningful
+    if column_mapping:
+        # Create a mapping from column index to meaningful names
+        col_rename_map = {}
+        for col_idx, desc in column_mapping.items():
+            if col_idx < len(nb_output.columns):
+                col_name = nb_output.columns[col_idx]
+                if 'Unnamed' in str(col_name):
+                    # Replace unnamed columns with meaningful names
+                    col_rename_map[col_name] = f"Col_{col_idx}_{desc}"
+        
+        # Apply column renaming
+        if col_rename_map:
+            nb_output = nb_output.rename(columns=col_rename_map)
+            c_output = c_output.rename(columns=col_rename_map)
+            r_output = r_output.rename(columns=col_rename_map)
+            
+            st.write(f"✅ **Columns renamed:** {len(col_rename_map)} unnamed columns replaced with meaningful names")
+            for old_name, new_name in col_rename_map.items():
+                st.write(f"  {old_name} → {new_name}")
     
     # Add transaction type identifiers
     nb_output['Transaction_Type'] = 'NB'
@@ -285,6 +332,9 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"  New Business: {len(nb_output)} (target: ~1200)")
     st.write(f"  Cancellations: {len(c_output)}")
     st.write(f"  Reinstatements: {len(r_output)}")
+    
+    # Show column information
+    st.write(f"🔍 **Output columns:** {list(combined_output.columns)}")
     
     return {
         'nb_data': nb_output,
