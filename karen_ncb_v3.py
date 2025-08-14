@@ -1,19 +1,60 @@
 #!/usr/bin/env python3
 """
 Karen NCB Data Processor - Version 3.0
-Clean, working version with proper column mapping
+Comprehensive debugger version to fix all issues
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
+import traceback
 
 st.set_page_config(page_title="Karen NCB v3.0", page_icon="🚀", layout="wide")
 
-def analyze_data_structure_clean(df):
-    """Clean, simple data structure analysis that actually works."""
-    st.write("🔍 **Starting clean data structure analysis...**")
+def debug_column_info(df, col_name, step_name):
+    """Comprehensive column debugging function."""
+    st.write(f"🔍 **DEBUG [{step_name}] - Column: {col_name}**")
+    
+    try:
+        # Get column info
+        col_data = df[col_name]
+        st.write(f"  - Data type: {col_data.dtype}")
+        st.write(f"  - Python type: {type(col_data)}")
+        st.write(f"  - Column name type: {type(col_name)}")
+        st.write(f"  - Column name value: {col_name}")
+        
+        # Check if it's a datetime
+        if col_data.dtype == 'datetime64[ns]':
+            st.write(f"  - ⚠️ DATETIME COLUMN DETECTED!")
+        elif 'datetime' in str(col_data.dtype):
+            st.write(f"  - ⚠️ DATETIME-LIKE COLUMN DETECTED!")
+        elif isinstance(col_name, pd.Timestamp):
+            st.write(f"  - ⚠️ COLUMN NAME IS DATETIME!")
+        elif 'datetime' in str(col_name).lower():
+            st.write(f"  - ⚠️ COLUMN NAME CONTAINS 'datetime'!")
+        
+        # Show sample data
+        sample_data = col_data.iloc[1:6] if len(col_data) > 1 else col_data.head()
+        st.write(f"  - Sample data (rows 1-5): {sample_data.tolist()}")
+        
+        # Try numeric conversion
+        try:
+            numeric_data = pd.to_numeric(col_data.iloc[1:], errors='coerce')
+            st.write(f"  - Numeric conversion: {not numeric_data.isna().all()}")
+            if not numeric_data.isna().all():
+                st.write(f"  - Numeric sample: {numeric_data.dropna().head(3).tolist()}")
+        except Exception as e:
+            st.write(f"  - Numeric conversion failed: {str(e)}")
+            
+    except Exception as e:
+        st.write(f"  - Error in debug: {str(e)}")
+    
+    st.write("---")
+
+def analyze_data_structure_debug(df):
+    """Debug version of data structure analysis."""
+    st.write("🔍 **Starting DEBUG data structure analysis...**")
     
     # Step 1: Find the transaction type column
     transaction_col = None
@@ -22,73 +63,76 @@ def analyze_data_structure_clean(df):
     for col in df.columns:
         try:
             # Get sample data and check for transaction types
-            # Skip the first row (header) and look at actual data
-            sample_data = df[col].dropna().iloc[1:].head(500)  # Look at more rows
+            sample_data = df[col].dropna().iloc[1:].head(500)
             if len(sample_data) > 0:
-                # Convert to string and check for NB, C, R
                 str_vals = [str(val).upper().strip() for val in sample_data]
                 nb_count = str_vals.count('NB')
                 c_count = str_vals.count('C')
                 r_count = str_vals.count('R')
                 
-                # Check if this looks like a transaction type column
                 if (nb_count > 0 or c_count > 0 or r_count > 0) and (nb_count + c_count + r_count) > len(sample_data) * 0.1:
                     transaction_col = col
                     st.write(f"✅ **Found Transaction Type column:** {col}")
                     st.write(f"   Sample counts: NB={nb_count}, C={c_count}, R={r_count}")
-                    st.write(f"   Total transaction records: {nb_count + c_count + r_count} out of {len(sample_data)}")
-                    
-                    # Show unique values found
-                    unique_vals = list(set(str_vals))
-                    transaction_vals = [v for v in unique_vals if v in ['NB', 'C', 'R']]
-                    st.write(f"   Transaction types found: {transaction_vals}")
                     break
         except Exception as e:
             continue
     
     if not transaction_col:
-        st.error("❌ **Could not find Transaction Type column with NB, C, R values**")
-        st.write("🔍 **Available columns and their sample values:**")
-        for i, col in enumerate(df.columns[:15]):  # Show first 15 columns
-            try:
-                # Show both header and sample data
-                header_val = df[col].iloc[0] if len(df) > 0 else 'No data'
-                sample_vals = df[col].dropna().iloc[1:].head(5).tolist()
-                st.write(f"  Column {i}: {col} → Header: '{header_val}' → Sample: {sample_vals}")
-            except:
-                st.write(f"  Column {i}: {col} → Error reading data")
+        st.error("❌ **Could not find Transaction Type column**")
         return None
     
-    # Step 2: Find Admin columns by looking for actual financial data
-    st.write("🔄 **Step 2: Finding Admin columns with financial data...**")
+    # Step 2: Find Admin columns with comprehensive debugging
+    st.write("🔄 **Step 2: Finding Admin columns with DEBUG...**")
     
     admin_candidates = []
     
     for col in df.columns:
+        st.write(f"🔍 **Analyzing column:** {col}")
+        
         try:
-            # Skip the header row and look at actual data
-            data_col = df[col].iloc[1:]  # Skip header row
+            # Skip the header row
+            data_col = df[col].iloc[1:]
             
-            # Skip datetime columns - they can't be used for Admin amounts
-            if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
-                st.write(f"⚠️ **Skipping datetime column:** {col} (dtype: {data_col.dtype})")
+            # DEBUG: Show column info
+            debug_column_info(df, col, "Column Analysis")
+            
+            # STRICT datetime detection
+            is_datetime = False
+            
+            # Check data type
+            if data_col.dtype == 'datetime64[ns]':
+                st.write(f"❌ **REJECTED: datetime64 data type**")
+                is_datetime = True
+            elif 'datetime' in str(data_col.dtype).lower():
+                st.write(f"❌ **REJECTED: datetime-like data type**")
+                is_datetime = True
+            
+            # Check column name
+            if isinstance(col, pd.Timestamp):
+                st.write(f"❌ **REJECTED: column name is Timestamp**")
+                is_datetime = True
+            elif 'datetime' in str(col).lower():
+                st.write(f"❌ **REJECTED: column name contains 'datetime'**")
+                is_datetime = True
+            
+            # Check sample data for datetime patterns
+            sample_str = str(data_col.head(10).tolist())
+            if any(dt_indicator in sample_str.lower() for dt_indicator in ['datetime', 'timestamp', '2025-', '2024-', '2023-']):
+                st.write(f"❌ **REJECTED: sample data suggests datetime**")
+                is_datetime = True
+            
+            if is_datetime:
+                st.write(f"🚫 **Column {col} REJECTED as datetime**")
                 continue
             
-            # Also check if the column name itself looks like a datetime
-            if isinstance(col, pd.Timestamp) or 'datetime' in str(col).lower():
-                st.write(f"⚠️ **Skipping column with datetime name:** {col}")
-                continue
-            
-            # Try to convert to numeric, handling mixed data types
+            # Try numeric conversion
             numeric_data = pd.to_numeric(data_col, errors='coerce')
             
-            # Check if we have meaningful numeric data
             if not numeric_data.isna().all():
-                # Count non-zero and non-null values
                 non_zero_count = (numeric_data != 0).sum()
                 total_count = len(numeric_data.dropna())
                 
-                # More flexible criteria for Admin columns
                 if non_zero_count > 5 and total_count > 10:
                     admin_candidates.append({
                         'column': col,
@@ -99,131 +143,33 @@ def analyze_data_structure_clean(df):
                         'std': numeric_data.std(),
                         'sample_values': numeric_data.dropna().head(5).tolist()
                     })
+                    st.write(f"✅ **Column {col} ACCEPTED as Admin column**")
+                else:
+                    st.write(f"⚠️ **Column {col} rejected: insufficient data**")
             else:
-                # If numeric conversion failed, try to find columns that might contain financial data
-                # Look for columns with dollar signs, numbers, or decimal points
-                sample_text = data_col.astype(str).head(100).str.cat(sep=' ')
-                if any(char in sample_text for char in ['$', '.', '-']) and any(char.isdigit() for char in sample_text):
-                    # This might be a financial column with mixed formatting
-                    try:
-                        # Try to extract numeric values
-                        cleaned_data = data_col.astype(str).str.replace('$', '').str.replace(',', '')
-                        cleaned_data = cleaned_data.str.replace('(', '-').str.replace(')', '')
-                        numeric_data = pd.to_numeric(cleaned_data, errors='coerce')
-                        
-                        if not numeric_data.isna().all():
-                            non_zero_count = (numeric_data != 0).sum()
-                            total_count = len(numeric_data.dropna())
-                            
-                            if non_zero_count > 5 and total_count > 10:
-                                admin_candidates.append({
-                                    'column': col,
-                                    'non_zero_count': non_zero_count,
-                                    'total_count': total_count,
-                                    'ratio': non_zero_count / total_count,
-                                    'mean': numeric_data.mean(),
-                                    'std': numeric_data.std(),
-                                    'sample_values': numeric_data.dropna().head(5).tolist(),
-                                    'note': 'Mixed format financial data'
-                                })
-                    except:
-                        pass
-                        
+                st.write(f"⚠️ **Column {col} rejected: not numeric**")
+                
         except Exception as e:
+            st.write(f"❌ **Error analyzing column {col}: {str(e)}**")
             continue
+        
+        st.write("---")
     
-    # Sort by ratio and select the best candidates
+    # Sort by ratio
     admin_candidates.sort(key=lambda x: x['ratio'], reverse=True)
     
     st.write(f"🔍 **Found {len(admin_candidates)} potential Admin columns:**")
     for i, candidate in enumerate(admin_candidates[:10]):
-        note = candidate.get('note', '')
         st.write(f"  {i+1}. {candidate['column']}: {candidate['non_zero_count']}/{candidate['total_count']} non-zero ({candidate['ratio']:.1%})")
         st.write(f"     Mean: {candidate['mean']:.2f}, Std: {candidate['std']:.2f}")
         st.write(f"     Sample: {candidate['sample_values']}")
-        if note:
-            st.write(f"     Note: {note}")
     
     if len(admin_candidates) < 4:
-        st.warning(f"⚠️ **Only found {len(admin_candidates)} Admin columns, but need 4**")
-        st.write("🔄 **Trying alternative Admin column detection...**")
-        
-        # Look for columns by name/content that might be Admin columns
-        alternative_admin_cols = []
-        for col in df.columns:
-            col_str = str(col).upper()
-            if any(keyword in col_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER', 'FEE', 'AMOUNT']):
-                try:
-                    data_col = df[col].iloc[1:]  # Skip header
-                    
-                    # Skip datetime columns
-                    if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
-                        continue
-                        
-                    # Also check if the column name itself looks like a datetime
-                    if isinstance(col, pd.Timestamp) or 'datetime' in str(col).lower():
-                        continue
-                        
-                    numeric_data = pd.to_numeric(data_col, errors='coerce')
-                    if not numeric_data.isna().all():
-                        non_zero_count = (numeric_data != 0).sum()
-                        total_count = len(numeric_data.dropna())
-                        if total_count > 10:
-                            alternative_admin_cols.append({
-                                'column': col,
-                                'non_zero_count': non_zero_count,
-                                'total_count': total_count,
-                                'ratio': non_zero_count / total_count,
-                                'note': 'Found by name/content'
-                            })
-                except:
-                    continue
-        
-        if alternative_admin_cols:
-            st.write(f"🔍 **Found {len(alternative_admin_cols)} alternative Admin columns by name/content:**")
-            for i, alt_col in enumerate(alternative_admin_cols[:8]):
-                st.write(f"  {i+1}. {alt_col['column']}: {alt_col['non_zero_count']}/{alt_col['total_count']} non-zero ({alt_col['ratio']:.1%})")
-                st.write(f"     Note: {alt_col['note']}")
-            
-            # Combine both lists and select the best 4
-            all_candidates = admin_candidates + alternative_admin_cols
-            all_candidates.sort(key=lambda x: x['ratio'], reverse=True)
-            
-            if len(all_candidates) >= 4:
-                admin_candidates = all_candidates[:4]
-                st.write(f"✅ **Combined detection found {len(admin_candidates)} Admin columns**")
-            else:
-                st.error(f"❌ **Still not enough Admin columns. Need 4, found {len(all_candidates)}**")
-                return None
-        else:
-            st.error(f"❌ **Alternative detection also failed. Need 4 Admin columns**")
-            return None
-    
-    # Final validation: ensure all selected columns are actually numeric
-    st.write("🔄 **Final validation of Admin columns...**")
-    validated_admin_cols = []
-    
-    for candidate in admin_candidates[:4]:
-        col = candidate['column']
-        try:
-            # Test if we can actually use this column for numeric operations
-            data_col = df[col].iloc[1:]  # Skip header
-            numeric_data = pd.to_numeric(data_col, errors='coerce')
-            
-            if not numeric_data.isna().all():
-                validated_admin_cols.append(candidate)
-                st.write(f"✅ **Validated Admin column:** {col} - numeric data confirmed")
-            else:
-                st.write(f"⚠️ **Rejected Admin column:** {col} - not numeric")
-        except Exception as e:
-            st.write(f"⚠️ **Rejected Admin column:** {col} - error: {str(e)}")
-    
-    if len(validated_admin_cols) < 4:
-        st.error(f"❌ **Only {len(validated_admin_cols)} Admin columns passed validation. Need 4.**")
+        st.error(f"❌ **Not enough Admin columns found. Need 4, found {len(admin_candidates)}**")
         return None
     
-    # Select the 4 best validated Admin columns
-    selected_admin_cols = validated_admin_cols[:4]
+    # Select the 4 best Admin columns
+    selected_admin_cols = admin_candidates[:4]
     
     admin_columns = {
         'Admin 3': selected_admin_cols[0]['column'],
@@ -235,6 +181,8 @@ def analyze_data_structure_clean(df):
     st.write(f"✅ **Selected Admin columns:**")
     for admin_type, col_name in admin_columns.items():
         st.write(f"  {admin_type}: {col_name}")
+        # Final debug check
+        debug_column_info(df, col_name, f"Final Selection - {admin_type}")
     
     return {
         'transaction_col': transaction_col,
@@ -273,8 +221,8 @@ def find_column_simple(df, search_terms, fallback_position=None):
     st.write(f"❌ **No column found for:** {search_terms}")
     return None
 
-def create_output_dataframe_clean(df, transaction_type, admin_cols, row_type, include_cancellation_fields=False):
-    """Create clean output dataframe with proper column mapping."""
+def create_output_dataframe_debug(df, transaction_type, admin_cols, row_type, include_cancellation_fields=False):
+    """Debug version of output dataframe creation."""
     if len(df) == 0:
         return pd.DataFrame()
     
@@ -371,13 +319,13 @@ def create_output_dataframe_clean(df, transaction_type, admin_cols, row_type, in
     
     return output
 
-def process_data_clean(df):
-    """Clean, simple data processing that actually works."""
+def process_data_debug(df):
+    """Debug version of data processing."""
     try:
-        st.write("🔍 **Starting clean data processing...**")
+        st.write("🔍 **Starting DEBUG data processing...**")
         
         # Analyze data structure
-        structure_info = analyze_data_structure_clean(df)
+        structure_info = analyze_data_structure_debug(df)
         if not structure_info:
             st.error("❌ **Could not analyze data structure**")
             return None
@@ -389,11 +337,16 @@ def process_data_clean(df):
         st.write(f"  - Transaction column: {transaction_col}")
         st.write(f"  - Admin columns: {admin_cols}")
         
+        # DEBUG: Show final Admin column details
+        st.write("🔍 **DEBUG: Final Admin column validation before processing**")
+        for admin_type, col_name in admin_cols.items():
+            debug_column_info(df, col_name, f"Pre-Processing - {admin_type}")
+        
         # Filter by transaction type - skip the header row
         st.write("🔄 **Filtering data by transaction type...**")
         
         # Skip the first row (header) and work with actual data
-        data_df = df.iloc[1:].copy()  # Skip header row
+        data_df = df.iloc[1:].copy()
         
         # New Business (NB)
         nb_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'NB'].copy()
@@ -407,13 +360,47 @@ def process_data_clean(df):
         r_df = data_df[data_df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
         st.write(f"  - R records found: {len(r_df)}")
         
-        # Apply Admin amount filtering
-        st.write("🔄 **Applying Admin amount filtering...**")
+        # Apply Admin amount filtering with DEBUG
+        st.write("🔄 **Applying Admin amount filtering with DEBUG...**")
         
         # For NB: sum > 0 AND all individual amounts > 0
         if len(nb_df) > 0:
             admin_cols_list = list(admin_cols.values())
-            nb_df['Admin_Sum'] = nb_df[admin_cols_list].sum(axis=1)
+            
+            st.write(f"🔍 **DEBUG: Admin columns for NB filtering:**")
+            for i, col in enumerate(admin_cols_list):
+                st.write(f"  Admin {i+1}: {col}")
+                debug_column_info(nb_df, col, f"NB Filtering - Admin {i+1}")
+            
+            # Convert to numeric and check for errors
+            st.write("🔄 **Converting Admin columns to numeric...**")
+            numeric_admin_cols = []
+            
+            for col in admin_cols_list:
+                try:
+                    numeric_col = pd.to_numeric(nb_df[col], errors='coerce')
+                    if not numeric_col.isna().all():
+                        numeric_admin_cols.append(numeric_col)
+                        st.write(f"✅ **Successfully converted {col} to numeric**")
+                    else:
+                        st.write(f"❌ **Failed to convert {col} to numeric**")
+                except Exception as e:
+                    st.write(f"❌ **Error converting {col}: {str(e)}**")
+            
+            if len(numeric_admin_cols) < 4:
+                st.error(f"❌ **Only {len(numeric_admin_cols)} Admin columns could be converted to numeric**")
+                return None
+            
+            # Calculate sum
+            st.write("🔄 **Calculating Admin sum...**")
+            try:
+                nb_df['Admin_Sum'] = pd.concat(numeric_admin_cols, axis=1).sum(axis=1)
+                st.write(f"✅ **Admin sum calculated successfully**")
+            except Exception as e:
+                st.write(f"❌ **Error calculating Admin sum: {str(e)}**")
+                st.write(f"  - Numeric columns: {len(numeric_admin_cols)}")
+                st.write(f"  - Column shapes: {[col.shape for col in numeric_admin_cols]}")
+                return None
             
             # First filter: sum > 0
             nb_filtered = nb_df[nb_df['Admin_Sum'] > 0]
@@ -421,10 +408,10 @@ def process_data_clean(df):
             
             # Second filter: all individual amounts > 0
             nb_final = nb_filtered[
-                (nb_filtered[admin_cols_list[0]] > 0) & 
-                (nb_filtered[admin_cols_list[1]] > 0) & 
-                (nb_filtered[admin_cols_list[2]] > 0) & 
-                (nb_filtered[admin_cols_list[3]] > 0)
+                (numeric_admin_cols[0] > 0) & 
+                (numeric_admin_cols[1] > 0) & 
+                (numeric_admin_cols[2] > 0) & 
+                (numeric_admin_cols[3] > 0)
             ]
             st.write(f"  - NB after individual Admin > 0 filter: {len(nb_final)} records")
             nb_df = nb_final
@@ -448,9 +435,9 @@ def process_data_clean(df):
         # Create output dataframes
         st.write("🔄 **Creating output dataframes...**")
         
-        nb_output = create_output_dataframe_clean(nb_df, 'NB', admin_cols, 'New Business', False)
-        c_output = create_output_dataframe_clean(c_df, 'C', admin_cols, 'Cancellation', True)
-        r_output = create_output_dataframe_clean(r_df, 'R', admin_cols, 'Reinstatement', False)
+        nb_output = create_output_dataframe_debug(nb_df, 'NB', admin_cols, 'New Business', False)
+        c_output = create_output_dataframe_debug(c_df, 'C', admin_cols, 'Cancellation', True)
+        r_output = create_output_dataframe_debug(r_df, 'R', admin_cols, 'Reinstatement', False)
         
         st.write("✅ **Data processing complete!**")
         st.write(f"  - Final NB records: {len(nb_output)}")
@@ -461,8 +448,8 @@ def process_data_clean(df):
         return nb_output, c_output, r_output
         
     except Exception as e:
-        st.error(f"❌ **Error in data processing:** {str(e)}")
-        import traceback
+        st.error(f"❌ **Error in DEBUG data processing:** {str(e)}")
+        st.write("**Full error details:**")
         st.code(traceback.format_exc())
         return None
 
@@ -553,7 +540,7 @@ def main():
             if st.button("🔄 **Process Data**", type="primary"):
                 with st.spinner("Processing data..."):
                     # Process the data using the enhanced functions
-                    nb_df, c_df, r_df = process_data_clean(df)
+                    nb_df, c_df, r_df = process_data_debug(df)
                     
                     if nb_df is not None and c_df is not None and r_df is not None:
                         
