@@ -62,7 +62,7 @@ def process_excel_data_karen_2_0(uploaded_file):
                 for col_letter, col_name in required_cols.items():
                     st.write(f"  {col_letter}: {col_name}")
                 
-                if len(ncb_columns) >= 7 and len(required_cols) >= len(['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U']):
+                if len(ncb_columns) >= 4 and len(required_cols) >= len(['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U']):
                     # Run comprehensive data structure check
                     structure_check = check_data_structure(df, ncb_columns, required_cols)
                     
@@ -78,7 +78,7 @@ def process_excel_data_karen_2_0(uploaded_file):
                     else:
                         return None
                 else:
-                    st.error(f"❌ Need at least 7 NCB columns and 10 required columns, found {len(ncb_columns)} NCB and {len(required_cols)} required")
+                    st.error(f"❌ Need at least 4 NCB columns and 10 required columns, found {len(ncb_columns)} NCB and {len(required_cols)} required")
                     return None
             else:
                 st.error(f"❌ '{data_sheet_name}' sheet not found. Available sheets: {excel_data.sheet_names}")
@@ -94,14 +94,11 @@ def find_ncb_columns_simple(df):
     """Find NCB columns by looking for Admin columns based on actual file structure."""
     ncb_columns = {}
     
-    # Look for Admin columns by their actual names (not positions)
-    # The actual file has ADMIN 1-10 Amount, we need to map specific ones to Karen 2.0 requirements
+    # Use the working approach from the original file - only 4 Admin columns
+    # The original working file used Admin 3, 4, 9, 10 (not 7 columns)
     admin_mapping = {
         'ADMIN 3 Amount': 'AO',  # Agent NCB Fee
         'ADMIN 4 Amount': 'AQ',  # Dealer NCB Fee
-        'ADMIN 6 Amount': 'AU',  # Agent NCB Offset
-        'ADMIN 7 Amount': 'AW',  # Agent NCB Offset Bucket
-        'ADMIN 8 Amount': 'AY',  # Dealer NCB Offset Bucket
         'ADMIN 9 Amount': 'BA',  # Agent NCB Offset
         'ADMIN 10 Amount': 'BC', # Dealer NCB Offset Bucket
     }
@@ -114,8 +111,8 @@ def find_ncb_columns_simple(df):
             st.write(f"✅ **Found NCB column:** {ncb_type} → {col}")
     
     # If we still don't have enough, try to find additional Admin columns
-    if len(ncb_columns) < 7:
-        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional Admin columns...**")
+    if len(ncb_columns) < 4:
+        st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 4. Looking for additional Admin columns...**")
         
         # Look for additional Admin columns that might contain NCB amounts
         for col in df.columns:
@@ -132,7 +129,7 @@ def find_ncb_columns_simple(df):
                             ncb_columns[admin_num] = col
                             st.write(f"✅ **Found additional Admin column:** {admin_num} → {col}")
                             
-                            if len(ncb_columns) >= 7:
+                            if len(ncb_columns) >= 4:
                                 break
             except:
                 pass
@@ -211,25 +208,31 @@ def find_required_columns_simple(df):
 def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
     """Process transaction data according to Karen 2.0 specifications."""
     try:
-        # Get the NCB column names
+        # Calculate NCB sum for filtering
         ncb_cols = list(ncb_columns.values())
         
-        if len(ncb_cols) < 7:
-            st.error(f"❌ Need exactly 7 NCB columns, found {len(ncb_cols)}")
+        if len(ncb_cols) < 4:
+            st.error(f"❌ Need exactly 4 NCB columns, found {len(ncb_cols)}")
             return None
         
-        st.write(f"✅ **Processing with NCB columns:** {ncb_cols}")
-        
-        # Convert NCB columns to numeric
+        # Convert NCB columns to numeric and fill NaN with 0
         for col in ncb_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             else:
-                st.error(f"❌ Column {col} not found in data")
+                st.error(f"❌ NCB column {col} not found in data")
                 return None
         
-        # Calculate sum of NCB amounts
-        df['NCB_Sum'] = df[ncb_cols].sum(axis=1)
+        # Calculate NCB sum (handle NaN values by filling with 0)
+        df['NCB_Sum'] = df[ncb_cols].fillna(0).sum(axis=1)
+        
+        st.write(f"✅ **NCB sum calculated using columns:** {ncb_cols}")
+        st.write(f"🔍 **NCB sum statistics:**")
+        st.write(f"  Min: {df['NCB_Sum'].min()}")
+        st.write(f"  Max: {df['NCB_Sum'].max()}")
+        st.write(f"  Mean: {df['NCB_Sum'].mean():.2f}")
+        st.write(f"  Non-zero count: {(df['NCB_Sum'] != 0).sum()}")
+        st.write(f"  Zero count: {(df['NCB_Sum'] == 0).sum()}")
         
         # Find transaction type column
         transaction_col = required_cols.get('M') # Transaction Type column
@@ -310,6 +313,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             st.write(f"🔍 **R NCB sums sample:** {r_df['NCB_Sum'].head().tolist()}")
         
         # Apply Karen 2.0 filtering rules
+        # Use the working approach from the original file
         # Data Set 1 (NB): sum >= 0 (include 0 values)
         nb_filtered = nb_df[nb_df['NCB_Sum'] >= 0]
         
@@ -420,7 +424,6 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
             required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
-            ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY'),
             ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
@@ -430,7 +433,6 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
             required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
-            ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY'),
             ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
@@ -441,8 +443,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
             required_cols.get('U'), required_cols.get('Z'), required_cols.get('AA'),
             required_cols.get('AB'), required_cols.get('AE'), ncb_columns.get('AO'),
-            ncb_columns.get('AQ'), ncb_columns.get('AU'), ncb_columns.get('AW'),
-            ncb_columns.get('AY'), ncb_columns.get('BA'), ncb_columns.get('BC')
+            ncb_columns.get('AQ'), ncb_columns.get('BA'), ncb_columns.get('BC')
         ]
         
         # Debug: Show selected columns for each dataset
@@ -496,9 +497,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
-            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+            'Admin 9 Amount (Agent NCB Offset)', 'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
         # Data Set 2 (R) - Different headers as per Karen 2.0 specifications
@@ -506,9 +505,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Insurer', 'Product Type', 'Coverage Code', 'Dealer Number', 'Dealer Name',
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
-            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+            'Admin 9 Amount (Agent NCB Offset)', 'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
         # Data Set 3 (C) - Different headers as per Karen 2.0 specifications
@@ -517,9 +514,7 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Contract Term', 'Cancellation Date', 'Cancellation Reason', 'Cancellation Factor',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
-            'Admin 6 Amount (Agent NCB Offset)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
-            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
-            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+            'Admin 9 Amount (Agent NCB Offset)', 'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
         # Apply headers
@@ -593,9 +588,9 @@ def validate_output_dataframes(nb_output, r_output, c_output, ncb_columns, requi
     
     # Check for duplicate column names
     for name, df, expected_cols in [
-        ('New Business (NB)', nb_output, 17),
-        ('Reinstatements (R)', r_output, 17),
-        ('Cancellations (C)', c_output, 21)
+        ('New Business (NB)', nb_output, 14),  # Changed from 17 to 14
+        ('Reinstatements (R)', r_output, 14),  # Changed from 17 to 14
+        ('Cancellations (C)', c_output, 18)     # Changed from 21 to 18
     ]:
         if df is None or df.empty:
             validation_results[f'{name.lower().replace(" ", "_").replace("(", "").replace(")", "")}_valid'] = False
@@ -619,13 +614,13 @@ def validate_output_dataframes(nb_output, r_output, c_output, ncb_columns, requi
         
         # Check for missing required columns
         if name == 'New Business (NB)' or name == 'Reinstatements (R)':
-            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']
+            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'AO', 'AQ', 'BA', 'BC']  # Changed to 4 NCB columns
         else:  # Cancellations
-            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'Z', 'AE', 'AB', 'AA', 'AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']
+            required_cols_list = ['B', 'C', 'D', 'E', 'F', 'H', 'L', 'J', 'M', 'U', 'Z', 'AE', 'AB', 'AA', 'AO', 'AQ', 'BA', 'BC']  # Changed to 4 NCB columns
         
         missing_cols = []
         for col_letter in required_cols_list:
-            if col_letter in ['AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']:
+            if col_letter in ['AO', 'AQ', 'BA', 'BC']:  # Changed to 4 NCB columns
                 col_name = ncb_columns.get(col_letter)
             else:
                 col_name = required_cols.get(col_letter)
