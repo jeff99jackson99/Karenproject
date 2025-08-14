@@ -118,231 +118,95 @@ def find_admin_columns(df, column_mapping):
     
     return admin_columns
 
-def process_excel_data_karen_v3(uploaded_file):
-    """Process Excel data using working logic with Karen 2.0 instructions."""
+def process_excel_data_karen_v3(df):
+    """Process Excel data using Karen v3.0 logic with enhanced column detection."""
     try:
-        excel_data = pd.ExcelFile(uploaded_file)
+        st.write("🔍 **Starting Karen v3.0 data processing...**")
         
-        # Create expandable section for processing details
-        with st.expander("🔍 **Processing Details** (Click to expand)", expanded=False):
-            st.write("🔍 **Karen v3.0 Processing Started**")
-            st.write(f"📊 Sheets found: {excel_data.sheet_names}")
-            
-            # Detect column structure
-            column_mapping = detect_column_structure(uploaded_file)
-            
-            # Process the Data sheet (main transaction data)
-            data_sheet_name = None
-            
-            # Look for common data sheet names
-            for sheet_name in excel_data.sheet_names:
-                if any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'detail', 'main']):
-                    data_sheet_name = sheet_name
-                    break
-            
-            # If no obvious data sheet found, try the first sheet that's not a summary
-            if not data_sheet_name:
-                for sheet_name in excel_data.sheet_names:
-                    if not any(keyword in sheet_name.lower() for keyword in ['summary', 'xref', 'ref', 'instruction']):
-                        data_sheet_name = sheet_name
-                        break
-            
-            if data_sheet_name:
-                st.write(f"📋 **Processing {data_sheet_name} Sheet**")
-                
-                # Read the data sheet
-                df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
-                st.write(f"📏 Data shape: {df.shape}")
-                
-                # Find admin columns
-                admin_columns = find_admin_columns(df, column_mapping)
-                st.write("🔍 **Admin Columns Found:**")
-                for admin_type, col_name in admin_columns.items():
-                    st.write(f"  {admin_type}: {col_name}")
-                
-                if len(admin_columns) >= 4:
-                    # Process the data using the working logic
-                    results = process_transaction_data_karen_v3(df, admin_columns)
-                    
-                    if results:
-                        # Rename columns with meaningful names
-                        renamed_nb, nb_rename_map = rename_columns_with_meaning(results['nb_data'], column_mapping)
-                        renamed_cancellation, c_rename_map = rename_columns_with_meaning(results['cancellation_data'], column_mapping)
-                        renamed_reinstatement, r_rename_map = rename_columns_with_meaning(results['reinstatement_data'], column_mapping)
-                        
-                        # Show column renaming information
-                        st.write("🔍 **Column Renaming Applied:**")
-                        if nb_rename_map:
-                            st.write("  **New Business columns renamed:**")
-                            for old_name, new_name in nb_rename_map.items():
-                                st.write(f"    {old_name} → {new_name}")
-                        
-                        # Update results with renamed dataframes
-                        results['nb_data'] = renamed_nb
-                        results['cancellation_data'] = renamed_cancellation
-                        results['reinstatement_data'] = renamed_reinstatement
-                        results['column_mapping'] = column_mapping
-                        
-                        return results
-                    else:
-                        return None
-                else:
-                    st.error(f"❌ Need at least 4 Admin columns, found {len(admin_columns)}")
-                    return None
-            else:
-                st.error("❌ No suitable data sheet found")
-                return None
-                
-    except Exception as e:
-        st.error(f"❌ Error in Karen v3.0 processing: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-        return None
-
-def process_transaction_data_karen_v3(df, admin_columns):
-    """Process transaction data with the working logic and Karen 2.0 requirements."""
-    try:
-        # Get the admin column names
-        admin_cols = [
-            admin_columns.get('Admin 3'),
-            admin_columns.get('Admin 4'), 
-            admin_columns.get('Admin 9'),
-            admin_columns.get('Admin 10')
-        ]
-        
-        # Remove None values
-        admin_cols = [col for col in admin_cols if col is not None]
-        
-        if len(admin_cols) < 4:
-            st.error(f"❌ Need exactly 4 Admin columns, found {len(admin_cols)}")
+        # First, analyze the data structure to find the right columns
+        structure_info = analyze_data_structure(df)
+        if not structure_info:
+            st.error("❌ **Could not analyze data structure**")
             return None
         
-        st.write(f"✅ **Processing with Admin columns:** {admin_cols}")
+        transaction_col = structure_info['transaction_col']
+        detected_admin_cols = structure_info['admin_columns']
         
-        # Convert admin columns to numeric
-        for col in admin_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            else:
-                st.error(f"❌ Column {col} not found in data")
-                return None
+        st.write(f"✅ **Data structure analysis complete:**")
+        st.write(f"  - Transaction column: {transaction_col}")
+        st.write(f"  - Admin columns: {detected_admin_cols}")
         
-        # Calculate sum of admin amounts
-        df['Admin_Sum'] = df[admin_cols].sum(axis=1)
+        # Filter data by transaction type
+        st.write("🔄 **Filtering data by transaction type...**")
         
-        # Find transaction type column
-        transaction_col = None
+        # New Business (NB) - Transaction Type = "NB"
+        nb_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'NB'].copy()
+        st.write(f"  - NB records found: {len(nb_df)}")
         
-        # First, look for columns that actually contain transaction type data
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                sample_vals = df[col].dropna().head(10).tolist()
-                # Check if this column contains transaction types (NB, C, R)
-                if any(str(v).upper() in ['NB', 'C', 'R', 'NEW BUSINESS', 'CANCELLATION', 'REINSTATEMENT'] for v in sample_vals):
-                    transaction_col = col
-                    st.write(f"✅ **Found transaction column by content:** {col} with values: {sample_vals[:5]}")
-                    break
+        # Cancellations (C) - Transaction Type = "C"
+        c_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'C'].copy()
+        st.write(f"  - C records found: {len(c_df)}")
         
-        # If not found by content, fall back to name-based search
-        if not transaction_col:
-            for col in df.columns:
-                if 'transaction' in str(col).lower() or 'type' in str(col).lower():
-                    transaction_col = col
-                    break
+        # Reinstatements (R) - Transaction Type = "R"
+        r_df = df[df[transaction_col].astype(str).str.upper().str.strip() == 'R'].copy()
+        st.write(f"  - R records found: {len(r_df)}")
         
-        if not transaction_col:
-            st.error("❌ No transaction type column found")
-            return None
+        # Apply Admin amount filtering
+        st.write("🔄 **Applying Admin amount filtering...**")
         
-        st.write(f"✅ **Transaction column found:** {transaction_col}")
-        
-        # Show unique values in transaction column to understand the data
-        unique_transactions = df[transaction_col].astype(str).unique()
-        st.write(f"🔍 **Unique transaction values found:** {unique_transactions[:20]}")  # Show first 20
-        
-        # Filter by transaction type and admin amounts
-        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
-        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
-        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
-        
-        st.write(f"📊 **Transaction counts:**")
-        st.write(f"  New Business: {nb_mask.sum()}")
-        st.write(f"  Cancellations: {c_mask.sum()}")
-        st.write(f"  Reinstatements: {r_mask.sum()}")
-        
-        # Filter NB data using the WORKING logic that gave ~1200 records
-        nb_df = df[nb_mask].copy()
-        
-        # Show Admin amount statistics for NB data
-        st.write(f"🔍 **New Business Admin Amount Analysis:**")
-        for i, col in enumerate(admin_cols):
-            col_values = nb_df[col]
-            non_zero_count = (col_values > 0).sum()
-            zero_count = (col_values == 0).sum()
-            st.write(f"  {col}: {non_zero_count} non-zero, {zero_count} zero values")
-        
-        # Show sum statistics
-        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
-        st.write(f"  Admin Sum > 0: {(nb_df['Admin_Sum'] > 0).sum()} records")
-        st.write(f"  Admin Sum = 0: {(nb_df['Admin_Sum'] == 0).sum()} records")
-        
-        # Use the EXACT working logic that gave ~1200 records
-        with st.expander("🔍 **Filtering Details** (Click to expand)", expanded=False):
-            st.write(f"🔍 **Using EXACT working logic from original version:**")
+        # For NB and R: sum > 0
+        if len(nb_df) > 0:
+            nb_df['Admin_Sum'] = nb_df[list(detected_admin_cols.values())].sum(axis=1)
+            nb_filtered = nb_df[nb_df['Admin_Sum'] > 0]
+            st.write(f"  - NB after Admin sum > 0 filter: {len(nb_filtered)} records")
             
-            # EXACT USER REQUIREMENT - ALL 4 Admin amounts > 0 AND sum > 0
-            nb_filtered = nb_df[
-                (nb_df['Admin_Sum'] > 0) &
-                (nb_df[admin_cols[0]] > 0) &
-                (nb_df[admin_cols[1]] > 0) &
-                (nb_df[admin_cols[2]] > 0) &
-                (nb_df[admin_cols[3]] > 0)
+            # Additional filter: all individual Admin amounts must be > 0
+            admin_cols_list = list(detected_admin_cols.values())
+            nb_final = nb_filtered[
+                (nb_filtered[admin_cols_list[0]] > 0) & 
+                (nb_filtered[admin_cols_list[1]] > 0) & 
+                (nb_filtered[admin_cols_list[2]] > 0) & 
+                (nb_filtered[admin_cols_list[3]] > 0)
             ]
-            st.write(f"✅ **EXACT working logic (ALL 4 Admin > 0 AND Sum > 0): {len(nb_filtered)} records**")
-            st.write(f"  Expected: ~1200 records")
-            st.write(f"  Actual: {len(nb_filtered)} records")
+            st.write(f"  - NB after individual Admin > 0 filter: {len(nb_final)} records")
+            nb_df = nb_final
         
-        # Filter C/R data according to Karen 2.0 requirements
-        # C: sum < 0 (negative values expected)
-        # R: sum > 0 (positive values expected)
-        c_df = df[c_mask].copy()
-        r_df = df[r_mask].copy()
+        if len(r_df) > 0:
+            r_df['Admin_Sum'] = r_df[list(detected_admin_cols.values())].sum(axis=1)
+            r_filtered = r_df[r_df['Admin_Sum'] > 0]
+            st.write(f"  - R after Admin sum > 0 filter: {len(r_filtered)} records")
+            r_df = r_filtered
         
-        # Apply Karen 2.0 filtering
-        c_filtered = c_df[c_df['Admin_Sum'] < 0]  # Cancellations: sum < 0
-        r_filtered = r_df[r_df['Admin_Sum'] > 0]  # Reinstatements: sum > 0
+        # For C: sum < 0
+        if len(c_df) > 0:
+            c_df['Admin_Sum'] = c_df[list(detected_admin_cols.values())].sum(axis=1)
+            c_filtered = c_df[c_df['Admin_Sum'] < 0]
+            st.write(f"  - C after Admin sum < 0 filter: {len(c_filtered)} records")
+            c_df = c_filtered
         
-        st.write(f"📊 **Karen 2.0 Filtered results:**")
-        st.write(f"  New Business (filtered): {len(nb_filtered)}")
-        st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
-        st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
+        # Create output dataframes with exact Karen 2.0 column mapping
+        st.write("🔄 **Creating output dataframes...**")
         
-        # Now create output dataframes with EXACT Karen 2.0 column mapping
-        # Data Set 1 - New Contracts (NB)
-        nb_output = create_karen_output_dataframe(nb_filtered, 'NB', admin_cols, 'New Business')
+        # New Business output
+        nb_output = create_karen_output_dataframe(nb_df, 'NB', detected_admin_cols, 'New Business', include_cancellation_fields=False)
         
-        # Data Set 2 - Reinstatements (R)
-        r_output = create_karen_output_dataframe(r_filtered, 'R', admin_cols, 'Reinstatement')
+        # Cancellation output (includes additional fields)
+        c_output = create_karen_output_dataframe(c_df, 'C', detected_admin_cols, 'Cancellation', include_cancellation_fields=True)
         
-        # Data Set 3 - Cancellations (C) - with additional columns
-        c_output = create_karen_output_dataframe(c_filtered, 'C', admin_cols, 'Cancellation', include_cancellation_fields=True)
+        # Reinstatement output
+        r_output = create_karen_output_dataframe(r_df, 'R', detected_admin_cols, 'Reinstatement', include_cancellation_fields=False)
         
-        st.write(f"🔍 **Karen 2.0 Output created:**")
-        st.write(f"  New Business: {len(nb_output)} records")
-        st.write(f"  Reinstatements: {len(r_output)} records")
-        st.write(f"  Cancellations: {len(c_output)} records")
-        st.write(f"  Total: {len(nb_output) + len(r_output) + len(c_output)} records")
+        st.write("✅ **Data processing complete!**")
+        st.write(f"  - Final NB records: {len(nb_output)}")
+        st.write(f"  - Final C records: {len(c_output)}")
+        st.write(f"  - Final R records: {len(r_output)}")
+        st.write(f"  - Total records: {len(nb_output) + len(c_output) + len(r_output)}")
         
-        return {
-            'nb_data': nb_output,
-            'cancellation_data': c_output,
-            'reinstatement_data': r_output,
-            'admin_columns': admin_cols,
-            'total_records': len(nb_output) + len(c_output) + len(r_output)
-        }
+        return nb_output, c_output, r_output
         
     except Exception as e:
-        st.error(f"❌ Error processing transaction data: {e}")
+        st.error(f"❌ **Error in Karen v3.0 processing:** {str(e)}")
+        st.write("**Full error details:**")
         import traceback
         st.code(traceback.format_exc())
         return None
@@ -868,10 +732,9 @@ def main():
             if st.button("🔄 **Process Data**", type="primary"):
                 with st.spinner("Processing data..."):
                     # Process the data using the enhanced functions
-                    result = process_excel_data_karen_v3(df)
+                    nb_df, c_df, r_df = process_excel_data_karen_v3(df)
                     
-                    if result is not None:
-                        nb_df, c_df, r_df = result
+                    if nb_df is not None and c_df is not None and r_df is not None:
                         
                         # Display results
                         st.header("📊 Processing Results")
