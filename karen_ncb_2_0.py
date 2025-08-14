@@ -232,6 +232,13 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     # Process New Business data with the WORKING filtering logic from old version
     nb_df = df[nb_mask].copy()
     
+    # DEBUG: Show what we're working with
+    st.write(f"🔍 **DEBUG INFO:**")
+    st.write(f"  Label columns found: {len(label_columns)}")
+    st.write(f"  Amount columns found: {len(amount_columns)}")
+    st.write(f"  Label columns: {label_columns}")
+    st.write(f"  Amount columns: {amount_columns}")
+    
     # Apply the EXACT filtering logic that was working before (giving ~1200 records)
     if len(amount_columns) >= 4:
         # Get the Admin AMOUNT columns (not label columns) - this is the key fix!
@@ -268,6 +275,44 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
         nb_filtered = nb_df
         st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
         st.write(f"  Reason: Only found {len(amount_columns)} Admin amount columns, need 4")
+        
+        # DEBUG: Try alternative approach if amount_columns is empty
+        if len(amount_columns) == 0:
+            st.write(f"🔄 **Trying alternative Admin column detection...**")
+            
+            # Look for numeric columns that might be Admin amounts
+            numeric_cols = []
+            for col in nb_df.columns:
+                try:
+                    if pd.api.types.is_numeric_dtype(nb_df[col]) or pd.to_numeric(nb_df[col], errors='coerce').notna().any():
+                        numeric_cols.append(col)
+                except:
+                    pass
+            
+            st.write(f"  Found {len(numeric_cols)} numeric columns: {numeric_cols[:10]}")
+            
+            if len(numeric_cols) >= 4:
+                st.write(f"  Using first 4 numeric columns for filtering")
+                admin_amount_cols = numeric_cols[:4]
+                
+                # Convert to numeric and filter
+                for col in admin_amount_cols:
+                    nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
+                
+                nb_df['Admin_Sum'] = nb_df[admin_amount_cols].sum(axis=1)
+                
+                # Apply filtering
+                nb_filtered = nb_df[
+                    (nb_df['Admin_Sum'] > 0) &
+                    (nb_df[admin_amount_cols[0]] > 0) &
+                    (nb_df[admin_amount_cols[1]] > 0) &
+                    (nb_df[admin_amount_cols[2]] > 0) &
+                    (nb_df[admin_amount_cols[3]] > 0)
+                ]
+                
+                st.write(f"✅ **Alternative filtering applied:** {len(nb_filtered)} records")
+                st.write(f"  Expected: ~1200 records")
+                st.write(f"  Actual: {len(nb_filtered)} records")
     
     # Process Cancellation data (negative/empty/0 values expected)
     c_df = df[c_mask].copy()
