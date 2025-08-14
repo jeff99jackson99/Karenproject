@@ -66,45 +66,119 @@ def analyze_data_structure_clean(df):
     
     for col in df.columns:
         try:
-            # Skip non-numeric columns
-            if df[col].dtype in ['object', 'string']:
-                continue
+            # Skip the header row and look at actual data
+            data_col = df[col].iloc[1:]  # Skip header row
+            
+            # Try to convert to numeric, handling mixed data types
+            numeric_data = pd.to_numeric(data_col, errors='coerce')
+            
+            # Check if we have meaningful numeric data
+            if not numeric_data.isna().all():
+                # Count non-zero and non-null values
+                non_zero_count = (numeric_data != 0).sum()
+                total_count = len(numeric_data.dropna())
                 
-            # Convert to numeric
-            numeric_data = pd.to_numeric(df[col], errors='coerce')
-            if numeric_data.isna().all():
-                continue
-            
-            # Check for meaningful financial data
-            non_zero_count = (numeric_data != 0).sum()
-            total_count = len(numeric_data.dropna())
-            
-            # Only consider columns with reasonable financial data distribution
-            if non_zero_count > 10 and non_zero_count < total_count * 0.8:
-                admin_candidates.append({
-                    'column': col,
-                    'non_zero_count': non_zero_count,
-                    'total_count': total_count,
-                    'ratio': non_zero_count / total_count,
-                    'mean': numeric_data.mean(),
-                    'std': numeric_data.std(),
-                    'sample_values': numeric_data.dropna().head(5).tolist()
-                })
-        except:
+                # More flexible criteria for Admin columns
+                if non_zero_count > 5 and total_count > 10:
+                    admin_candidates.append({
+                        'column': col,
+                        'non_zero_count': non_zero_count,
+                        'total_count': total_count,
+                        'ratio': non_zero_count / total_count,
+                        'mean': numeric_data.mean(),
+                        'std': numeric_data.std(),
+                        'sample_values': numeric_data.dropna().head(5).tolist()
+                    })
+            else:
+                # If numeric conversion failed, try to find columns that might contain financial data
+                # Look for columns with dollar signs, numbers, or decimal points
+                sample_text = data_col.astype(str).head(100).str.cat(sep=' ')
+                if any(char in sample_text for char in ['$', '.', '-']) and any(char.isdigit() for char in sample_text):
+                    # This might be a financial column with mixed formatting
+                    try:
+                        # Try to extract numeric values
+                        cleaned_data = data_col.astype(str).str.replace('$', '').str.replace(',', '')
+                        cleaned_data = cleaned_data.str.replace('(', '-').str.replace(')', '')
+                        numeric_data = pd.to_numeric(cleaned_data, errors='coerce')
+                        
+                        if not numeric_data.isna().all():
+                            non_zero_count = (numeric_data != 0).sum()
+                            total_count = len(numeric_data.dropna())
+                            
+                            if non_zero_count > 5 and total_count > 10:
+                                admin_candidates.append({
+                                    'column': col,
+                                    'non_zero_count': non_zero_count,
+                                    'total_count': total_count,
+                                    'ratio': non_zero_count / total_count,
+                                    'mean': numeric_data.mean(),
+                                    'std': numeric_data.std(),
+                                    'sample_values': numeric_data.dropna().head(5).tolist(),
+                                    'note': 'Mixed format financial data'
+                                })
+                    except:
+                        pass
+                        
+        except Exception as e:
             continue
     
-    # Sort by ratio and select the best 4 candidates
+    # Sort by ratio and select the best candidates
     admin_candidates.sort(key=lambda x: x['ratio'], reverse=True)
     
     st.write(f"🔍 **Found {len(admin_candidates)} potential Admin columns:**")
-    for i, candidate in enumerate(admin_candidates[:8]):
+    for i, candidate in enumerate(admin_candidates[:10]):
+        note = candidate.get('note', '')
         st.write(f"  {i+1}. {candidate['column']}: {candidate['non_zero_count']}/{candidate['total_count']} non-zero ({candidate['ratio']:.1%})")
         st.write(f"     Mean: {candidate['mean']:.2f}, Std: {candidate['std']:.2f}")
         st.write(f"     Sample: {candidate['sample_values']}")
+        if note:
+            st.write(f"     Note: {note}")
     
     if len(admin_candidates) < 4:
-        st.error(f"❌ **Not enough Admin columns found. Need 4, found {len(admin_candidates)}**")
-        return None
+        st.warning(f"⚠️ **Only found {len(admin_candidates)} Admin columns, but need 4**")
+        st.write("🔄 **Trying alternative Admin column detection...**")
+        
+        # Look for columns by name/content that might be Admin columns
+        alternative_admin_cols = []
+        for col in df.columns:
+            col_str = str(col).upper()
+            if any(keyword in col_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER', 'FEE', 'AMOUNT']):
+                try:
+                    data_col = df[col].iloc[1:]  # Skip header
+                    numeric_data = pd.to_numeric(data_col, errors='coerce')
+                    if not numeric_data.isna().all():
+                        non_zero_count = (numeric_data != 0).sum()
+                        total_count = len(numeric_data.dropna())
+                        if total_count > 10:
+                            alternative_admin_cols.append({
+                                'column': col,
+                                'non_zero_count': non_zero_count,
+                                'total_count': total_count,
+                                'ratio': non_zero_count / total_count,
+                                'note': 'Found by name/content'
+                            })
+                except:
+                    continue
+        
+        if alternative_admin_cols:
+            st.write(f"🔍 **Found {len(alternative_admin_cols)} alternative Admin columns by name/content:**")
+            for i, alt_col in enumerate(alternative_admin_cols[:8]):
+                st.write(f"  {i+1}. {alt_col['column']}: {alt_col['non_zero_count']}/{alt_col['total_count']} non-zero ({alt_col['ratio']:.1%})")
+                st.write(f"     Note: {alt_col['note']}")
+            
+            # Combine both lists and select the best 4
+            all_candidates = admin_candidates + alternative_admin_cols
+            all_candidates.sort(key=lambda x: x['ratio'], reverse=True)
+            
+            if len(all_candidates) >= 4:
+                admin_candidates = all_candidates[:4]
+                st.write(f"✅ **Combined detection found {len(admin_candidates)} Admin columns**")
+            else:
+                st.error(f"❌ **Still not enough Admin columns. Need 4, found {len(all_candidates)}**")
+                return None
+        else:
+            st.error(f"❌ **Alternative detection also failed. Need 4 Admin columns**")
+            return None
     
     # Select the 4 best Admin columns
     selected_admin_cols = admin_candidates[:4]
