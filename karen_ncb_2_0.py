@@ -11,147 +11,121 @@ import io
 
 st.set_page_config(page_title="Karen NCB 2.0", page_icon="🚀", layout="wide")
 
-def detect_column_structure_v2(excel_file):
-    """Detect column structure from Col Ref sheet for version 2.0 - using working logic from first version."""
+def detect_column_structure_v2(df, sheets_info):
+    """Detect column structure using reference sheet or content analysis."""
+    
+    # First, try to find the correct reference sheet
+    reference_sheet_names = ['Col Ref', 'xref', 'Xref', 'Column Reference', 'Reference']
+    reference_sheet = None
+    
+    for sheet_name in reference_sheet_names:
+        if sheet_name in sheets_info:
+            reference_sheet = sheet_name
+            break
+    
+    if not reference_sheet:
+        st.error("❌ No reference sheet found. Looking for: Col Ref, xref, Xref, Column Reference, or Reference")
+        return None, {}, {}
+    
+    st.write(f"✅ **Using reference sheet:** {reference_sheet}")
+    
+    # Load the reference sheet
     try:
-        # First, let's see what sheets are available
-        excel_data = pd.ExcelFile(excel_file)
-        st.write(f"🔍 **Available sheets:** {excel_data.sheet_names}")
+        ref_df = pd.read_excel(df, sheet_name=reference_sheet)
+        st.write(f"🔍 **Reference sheet loaded:** {ref_df.shape}")
         
-        # Look for the Col Ref sheet (try different possible names)
-        col_ref_sheet = None
-        possible_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref', 'xref', 'Xref']
+        # Show first few rows for debugging
+        st.write("🔍 **Reference sheet first few rows:**")
+        st.dataframe(ref_df.head(3))
         
-        for sheet_name in excel_data.sheet_names:
-            if any(name.lower() in sheet_name.lower() for name in possible_names):
-                col_ref_sheet = sheet_name
-                break
-        
-        if not col_ref_sheet:
-            st.error(f"❌ Could not find Col Ref sheet. Available sheets: {excel_data.sheet_names}")
-            return {}, {}, {}
-        
-        st.write(f"✅ **Using reference sheet:** {col_ref_sheet}")
-        
-        # Read the reference sheet
-        col_ref_df = pd.read_excel(excel_file, sheet_name=col_ref_sheet)
-        
-        st.write(f"🔍 **Reference sheet loaded:** {col_ref_df.shape}")
-        st.write(f"🔍 **Reference sheet first few rows:**")
-        st.dataframe(col_ref_df.head(10))
-        
-        # Use the EXACT working logic from the first version
-        column_mapping = {}
+        # Look for Admin/NCB information in the reference sheet
         admin_columns = {}
+        column_mapping = {}
         
-        # Look for the row that contains column descriptions
-        for idx, row in col_ref_df.iterrows():
-            if 'Admin' in str(row.iloc[2]) or 'NCB' in str(row.iloc[7]):
-                # This is the row with column descriptions
-                for col_idx, value in enumerate(row):
-                    if pd.notna(value) and str(value).strip():
-                        desc = str(value).strip()
-                        column_mapping[col_idx] = desc
-                        
-                        # Use the EXACT working logic from first version
-                        if 'Admin' in desc or 'NCB' in desc:
-                            if 'Amount' in desc or 'Fee' in desc:
-                                # This is an Admin amount column
-                                if 'Agent' in desc:
-                                    admin_columns['Admin 3'] = col_idx
-                                elif 'Dealer' in desc:
-                                    admin_columns['Admin 4'] = col_idx
-                                elif 'Offset' in desc:
-                                    if 'Agent' in desc:
-                                        admin_columns['Admin 9'] = col_idx
-                                    elif 'Dealer' in desc:
-                                        admin_columns['Admin 10'] = col_idx
-                break
-        
-        # If we don't have enough admin columns, try to find them by content analysis (working logic from first version)
-        if len(admin_columns) < 4:
-            st.warning("⚠️ Could not identify all Admin columns from mapping, trying content-based detection...")
-            
-            # Look for columns that might contain Admin amounts by analyzing their content
-            potential_admin_cols = []
-            
-            # Read the main data sheet to analyze column content
-            data_sheet = None
-            for sheet in excel_data.sheet_names:
-                if sheet != col_ref_sheet and not any(keyword in sheet.lower() for keyword in ['summary', 'xref', 'ref', 'col']):
-                    data_sheet = sheet
-                    break
-            
-            if data_sheet:
-                df = pd.read_excel(excel_file, sheet_name=data_sheet)
-                
-                for col in df.columns:
-                    try:
-                        # Skip datetime columns
-                        if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
-                            continue
-                            
-                        # Try to convert to numeric
-                        numeric_values = pd.to_numeric(df[col], errors='coerce')
-                        if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
-                            # Check if this column has meaningful non-zero values
-                            non_zero_count = (numeric_values > 0).sum()
-                            total_count = len(numeric_values)
-                            
-                            # Only consider columns with a reasonable number of non-zero values
-                            if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
-                                potential_admin_cols.append({
-                                    'column': col,
-                                    'non_zero_count': non_zero_count,
-                                    'total_count': total_count,
-                                    'non_zero_ratio': non_zero_count / total_count
-                                })
-                    except:
-                        pass
-                
-                # Sort by non-zero ratio to find the most likely Admin columns
-                potential_admin_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
-                
-                st.write(f"🔍 **Potential Admin columns found:** {len(potential_admin_cols)}")
-                for i, col_info in enumerate(potential_admin_cols[:10]):  # Show top 10
-                    st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
-                
-                # Select the top 4 columns as Admin columns
-                if len(potential_admin_cols) >= 4:
-                    admin_columns = {
-                        'Admin 3': potential_admin_cols[0]['column'],
-                        'Admin 4': potential_admin_cols[1]['column'], 
-                        'Admin 9': potential_admin_cols[2]['column'],
-                        'Admin 10': potential_admin_cols[3]['column']
-                    }
+        # Search through all rows and columns for Admin/NCB information
+        for row_idx, row in ref_df.iterrows():
+            for col_idx, cell_value in enumerate(row):
+                cell_str = str(cell_value).strip()
+                if any(keyword in cell_str.upper() for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                    st.write(f"🔍 **Found potential Admin row {row_idx}, col {col_idx}:** {cell_str}")
                     
-                    st.write(f"✅ **Admin columns assigned by content analysis:**")
-                    for admin_type, col_name in admin_columns.items():
-                        st.write(f"  {admin_type}: {col_name}")
-                else:
-                    st.error(f"❌ Not enough potential Admin columns found. Need 4, found {len(potential_admin_cols)}")
+                    # Look for Admin column patterns
+                    if 'ADMIN' in cell_str.upper() or 'NCB' in cell_str.upper():
+                        # This row might contain Admin column information
+                        for i, val in enumerate(row):
+                            val_str = str(val).strip()
+                            if 'ADMIN' in val_str.upper() or 'NCB' in val_str.upper():
+                                # Found an Admin column reference
+                                if '3' in val_str or 'AGENT NCB' in val_str.upper():
+                                    admin_columns['Admin 3'] = col_idx
+                                elif '4' in val_str or 'DEALER NCB' in val_str.upper():
+                                    admin_columns['Admin 4'] = col_idx
+                                elif '9' in val_str or 'AGENT NCB OFFSET' in val_str.upper():
+                                    admin_columns['Admin 9'] = col_idx
+                                elif '10' in val_str or 'DEALER NCB OFFSET' in val_str.upper():
+                                    admin_columns['Admin 10'] = col_idx
+                                
+                                st.write(f"  ✅ **Admin column mapped:** {val_str} → column {col_idx}")
+                        
+                        # If we found Admin columns, also look for other column mappings
+                        if len(admin_columns) >= 2:
+                            for i, val in enumerate(row):
+                                val_str = str(val).strip()
+                                if val_str and val_str != 'nan':
+                                    column_mapping[i] = val_str
+                        
+                        break
         
-        if admin_columns:
-            st.write("🔍 **Column Structure Detected:**")
-            st.write(f"  Total columns mapped: {len(column_mapping)}")
-            st.write(f"  Admin columns found: {len(admin_columns)}")
-            
-            st.write("🔍 **Admin column mappings:**")
-            for admin_type, col_idx in admin_columns.items():
-                st.write(f"  {admin_type}: Column {col_idx}")
-                if col_idx in column_mapping:
-                    st.write(f"    Description: {column_mapping[col_idx]}")
-            
+        if len(admin_columns) >= 2:
+            st.write(f"✅ **Admin columns found from reference sheet:** {admin_columns}")
+            st.write(f"✅ **Column mapping created:** {len(column_mapping)} columns mapped")
             return column_mapping, admin_columns, {}
-        else:
-            st.warning("⚠️ No Admin column mapping found in reference sheet")
-            return {}, {}, {}
+        
+        # If no Admin columns found in reference sheet, try content analysis
+        st.write("⚠️ **No Admin columns found in reference sheet, trying content analysis...**")
         
     except Exception as e:
-        st.error(f"❌ Error reading reference sheet: {e}")
-        import traceback
-        st.code(traceback.format_exc())
-        return {}, {}, {}
+        st.error(f"❌ Error reading reference sheet: {str(e)}")
+        st.write(f"Debug info: {type(e).__name__}")
+        return None, {}, {}
+    
+    # Fallback: Try to detect Admin columns from the main data
+    st.write("🔄 **Trying alternative Admin column detection...**")
+    
+    # Look for columns that might contain Admin information
+    potential_admin_cols = []
+    for col in df.columns:
+        col_str = str(col).upper()
+        if any(keyword in col_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+            potential_admin_cols.append({
+                'column': col,
+                'content': col_str
+            })
+    
+    if potential_admin_cols:
+        st.write(f"🔍 **Found potential Admin columns:**")
+        for col_info in potential_admin_cols:
+            st.write(f"  • {col_info['column']}: {col_info['content']}")
+        
+        # Try to identify which Admin columns these are
+        admin_columns = {}
+        for col_info in potential_admin_cols:
+            col_name = col_info['column']
+            if '3' in str(col_name) or 'AGENT NCB' in str(col_name).upper():
+                admin_columns['Admin 3'] = col_name
+            elif '4' in str(col_name) or 'DEALER NCB' in str(col_name).upper():
+                admin_columns['Admin 4'] = col_name
+            elif '9' in str(col_name) or 'AGENT NCB OFFSET' in str(col_name).upper():
+                admin_columns['Admin 9'] = col_name
+            elif '10' in str(col_name) or 'DEALER NCB OFFSET' in str(col_name).upper():
+                admin_columns['Admin 10'] = col_name
+        
+        if len(admin_columns) >= 2:
+            st.write(f"✅ **Admin columns identified from content:** {admin_columns}")
+            return {}, admin_columns, {}
+    
+    st.error("❌ Could not detect Admin column structure")
+    return None, {}, {}
 
 def find_transaction_column(df):
     """Find the transaction type column."""
@@ -421,152 +395,144 @@ def main():
             
             with st.spinner("🔍 Analyzing file structure..."):
                 # Detect column structure
-                column_mapping, admin_columns, amount_columns = detect_column_structure_v2(uploaded_file)
+                excel_data = pd.ExcelFile(uploaded_file)
+                sheets_info = excel_data.sheet_names
                 
-                if not column_mapping:
+                column_mapping, admin_columns, amount_columns = detect_column_structure_v2(uploaded_file, sheets_info)
+                
+                if not column_mapping and not admin_columns:
                     st.error("❌ Could not detect column structure. Please ensure file has a reference sheet (Col Ref, xref, etc.).")
                     st.write("💡 **Tip:** Your file should have a sheet that defines the Admin column structure (like 'Col Ref' or 'xref').")
                     return
-            
-            with st.spinner("📊 Processing data..."):
-                # Read the main data sheet
-                try:
-                    excel_data = pd.ExcelFile(uploaded_file)
+                
+                # Load the main data sheet
+                data_sheet = None
+                for sheet in sheets_info:
+                    if sheet.lower() == 'data':
+                        data_sheet = sheet
+                        break
+                
+                if not data_sheet:
+                    st.error("❌ No 'Data' sheet found in the uploaded file.")
+                    st.write(f"💡 **Available sheets:** {sheets_info}")
+                    return
+                
+                st.write(f"✅ **Loading data from sheet:** {data_sheet}")
+                
+                # Load the data
+                df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
+                st.write(f"✅ **Data loaded:** {df.shape[0]} rows, {df.shape[1]} columns")
+                
+                # Process data
+                result = process_data_v2(df, column_mapping, admin_columns, amount_columns)
+                
+                if result:
+                    st.success(f"✅ **Processing Complete!** Generated {result['total_records']} records")
                     
-                    # Find the main data sheet (not the reference sheet)
-                    data_sheet = None
-                    reference_sheet_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref', 'xref', 'Xref']
+                    # Display results
+                    st.subheader("📊 Processing Results")
+                    st.write(f"**Total Records:** {result['total_records']}")
                     
-                    for sheet in excel_data.sheet_names:
-                        if not any(ref_name.lower() in sheet.lower() for ref_name in reference_sheet_names) and not any(keyword in sheet.lower() for keyword in ['summary', 'ref']):
-                            data_sheet = sheet
-                            break
+                    # Show breakdown by transaction type
+                    type_counts = result['combined_data']['Transaction_Type'].value_counts()
+                    st.write("**Breakdown by Transaction Type:**")
+                    for trans_type, count in type_counts.items():
+                        st.write(f"  {trans_type}: {count} records")
                     
-                    if not data_sheet:
-                        st.error("❌ Could not find main data sheet")
-                        return
+                    # Show sample data in collapsible section
+                    with st.expander("🔍 **Sample Output Data** (Click to expand)", expanded=False):
+                        st.dataframe(result['combined_data'].head(10))
                     
-                    st.write(f"📋 **Processing sheet:** {data_sheet}")
+                    # Generate Excel file with separate worksheets
+                    if st.button("📥 Download Excel File (All Data Sets)"):
+                        try:
+                            # Create Excel file with separate worksheets
+                            output = io.BytesIO()
+                            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                                # Data Set 1 - New Contracts (NB)
+                                if len(result['nb_data']) > 0:
+                                    result['nb_data'].to_excel(writer, sheet_name='New_Contracts_NB', index=False)
+                                    st.write(f"✅ **New Contracts worksheet created:** {len(result['nb_data'])} records")
+                                
+                                # Data Set 2 - Reinstatements (R)
+                                if len(result['reinstatement_data']) > 0:
+                                    result['reinstatement_data'].to_excel(writer, sheet_name='Reinstatements_R', index=False)
+                                    st.write(f"✅ **Reinstatements worksheet created:** {len(result['reinstatement_data'])} records")
+                                
+                                # Data Set 3 - Cancellations (C)
+                                if len(result['cancellation_data']) > 0:
+                                    result['cancellation_data'].to_excel(writer, sheet_name='Cancellations_C', index=False)
+                                    st.write(f"✅ **Cancellations worksheet created:** {len(result['cancellation_data'])} records")
+                            
+                            output.seek(0)
+                            
+                            # Create download button
+                            st.download_button(
+                                label="📥 Download Excel File (3 Worksheets)",
+                                data=output.getvalue(),
+                                file_name=f"NCB_Transaction_Summary_v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                            
+                            st.success(f"✅ **Excel file generated successfully!**")
+                            st.write(f"📊 **File contains:**")
+                            st.write(f"  • New Contracts (NB): {len(result['nb_data'])} records")
+                            st.write(f"  • Reinstatements (R): {len(result['reinstatement_data'])} records")
+                            st.write(f"  • Cancellations (C): {len(result['cancellation_data'])} records")
+                            st.write(f"  • **Total:** {result['total_records']} records across 3 worksheets")
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error generating Excel file: {str(e)}")
+                            st.write(f"Debug info: {type(e).__name__}")
                     
-                    # Read data
-                    df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
-                    st.write(f"📏 **Data shape:** {df.shape}")
+                    # Individual download buttons for each data set
+                    st.write("---")
+                    st.write("### 📥 Individual Data Set Downloads")
                     
-                    # Process data
-                    result = process_data_v2(df, column_mapping, admin_columns, amount_columns)
+                    # New Business download
+                    if len(result['nb_data']) > 0:
+                        if st.button(f"📥 Download New Business Data ({len(result['nb_data'])} records)"):
+                            nb_output = io.BytesIO()
+                            result['nb_data'].to_excel(nb_output, index=False)
+                            nb_output.seek(0)
+                            
+                            st.download_button(
+                                label=f"📥 Download NB Data ({len(result['nb_data'])} records)",
+                                data=nb_output.getvalue(),
+                                file_name=f"NCB_New_Business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
                     
-                    if result:
-                        st.success(f"✅ **Processing Complete!** Generated {result['total_records']} records")
-                        
-                        # Display results
-                        st.subheader("📊 Processing Results")
-                        st.write(f"**Total Records:** {result['total_records']}")
-                        
-                        # Show breakdown by transaction type
-                        type_counts = result['combined_data']['Transaction_Type'].value_counts()
-                        st.write("**Breakdown by Transaction Type:**")
-                        for trans_type, count in type_counts.items():
-                            st.write(f"  {trans_type}: {count} records")
-                        
-                        # Show sample data in collapsible section
-                        with st.expander("🔍 **Sample Output Data** (Click to expand)", expanded=False):
-                            st.dataframe(result['combined_data'].head(10))
-                        
-                        # Generate Excel file with separate worksheets
-                        if st.button("📥 Download Excel File (All Data Sets)"):
-                            try:
-                                # Create Excel file with separate worksheets
-                                output = io.BytesIO()
-                                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                                    # Data Set 1 - New Contracts (NB)
-                                    if len(result['nb_data']) > 0:
-                                        result['nb_data'].to_excel(writer, sheet_name='New_Contracts_NB', index=False)
-                                        st.write(f"✅ **New Contracts worksheet created:** {len(result['nb_data'])} records")
-                                    
-                                    # Data Set 2 - Reinstatements (R)
-                                    if len(result['reinstatement_data']) > 0:
-                                        result['reinstatement_data'].to_excel(writer, sheet_name='Reinstatements_R', index=False)
-                                        st.write(f"✅ **Reinstatements worksheet created:** {len(result['reinstatement_data'])} records")
-                                    
-                                    # Data Set 3 - Cancellations (C)
-                                    if len(result['cancellation_data']) > 0:
-                                        result['cancellation_data'].to_excel(writer, sheet_name='Cancellations_C', index=False)
-                                        st.write(f"✅ **Cancellations worksheet created:** {len(result['cancellation_data'])} records")
-                                
-                                output.seek(0)
-                                
-                                # Create download button
-                                st.download_button(
-                                    label="📥 Download Excel File (3 Worksheets)",
-                                    data=output.getvalue(),
-                                    file_name=f"NCB_Transaction_Summary_v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                                
-                                st.success(f"✅ **Excel file generated successfully!**")
-                                st.write(f"📊 **File contains:**")
-                                st.write(f"  • New Contracts (NB): {len(result['nb_data'])} records")
-                                st.write(f"  • Reinstatements (R): {len(result['reinstatement_data'])} records")
-                                st.write(f"  • Cancellations (C): {len(result['cancellation_data'])} records")
-                                st.write(f"  • **Total:** {result['total_records']} records across 3 worksheets")
-                                
-                            except Exception as e:
-                                st.error(f"❌ Error generating Excel file: {str(e)}")
-                                st.write(f"Debug info: {type(e).__name__}")
-                        
-                        # Individual download buttons for each data set
-                        st.write("---")
-                        st.write("### 📥 Individual Data Set Downloads")
-                        
-                        # New Business download
-                        if len(result['nb_data']) > 0:
-                            if st.button(f"📥 Download New Business Data ({len(result['nb_data'])} records)"):
-                                nb_output = io.BytesIO()
-                                result['nb_data'].to_excel(nb_output, index=False)
-                                nb_output.seek(0)
-                                
-                                st.download_button(
-                                    label=f"📥 Download NB Data ({len(result['nb_data'])} records)",
-                                    data=nb_output.getvalue(),
-                                    file_name=f"NCB_New_Business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                        
-                        # Cancellation download
-                        if len(result['cancellation_data']) > 0:
-                            if st.button(f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)"):
-                                c_output = io.BytesIO()
-                                result['cancellation_data'].to_excel(c_output, index=False)
-                                c_output.seek(0)
-                                
-                                st.download_button(
-                                    label=f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)",
-                                    data=c_output.getvalue(),
-                                    file_name=f"NCB_Cancellations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                        
-                        # Reinstatement download
-                        if len(result['reinstatement_data']) > 0:
-                            if st.button(f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)"):
-                                r_output = io.BytesIO()
-                                result['reinstatement_data'].to_excel(r_output, index=False)
-                                r_output.seek(0)
-                                
-                                st.download_button(
-                                    label=f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)",
-                                    data=r_output.getvalue(),
-                                    file_name=f"NCB_Reinstatements_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                )
-                        
-                    else:
-                        st.error("❌ No data was processed successfully")
-                        
-                except Exception as e:
-                    st.error(f"❌ Error processing file: {e}")
-                    import traceback
-                    st.code(traceback.format_exc())
+                    # Cancellation download
+                    if len(result['cancellation_data']) > 0:
+                        if st.button(f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)"):
+                            c_output = io.BytesIO()
+                            result['cancellation_data'].to_excel(c_output, index=False)
+                            c_output.seek(0)
+                            
+                            st.download_button(
+                                label=f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)",
+                                data=c_output.getvalue(),
+                                file_name=f"NCB_Cancellations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                    
+                    # Reinstatement download
+                    if len(result['reinstatement_data']) > 0:
+                        if st.button(f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)"):
+                            r_output = io.BytesIO()
+                            result['reinstatement_data'].to_excel(r_output, index=False)
+                            r_output.seek(0)
+                            
+                            st.download_button(
+                                label=f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)",
+                                data=r_output.getvalue(),
+                                file_name=f"NCB_Reinstatements_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                    
+                else:
+                    st.error("❌ Processing failed. Please check the file format and try again.")
 
 if __name__ == "__main__":
     main()
