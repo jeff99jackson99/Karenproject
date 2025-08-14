@@ -302,42 +302,43 @@ def process_transaction_data_karen_v3(df, admin_columns):
             st.write(f"  Expected: ~1200 records")
             st.write(f"  Actual: {len(nb_filtered)} records")
         
-        # Filter C/R data (sum != 0) - this was working
-        cr_df = df[c_mask | r_mask].copy()
-        cr_filtered = cr_df[cr_df['Admin_Sum'] != 0]
+        # Filter C/R data according to Karen 2.0 requirements
+        # C: sum < 0 (negative values expected)
+        # R: sum > 0 (positive values expected)
+        c_df = df[c_mask].copy()
+        r_df = df[r_mask].copy()
         
-        st.write(f"📊 **Filtered results:**")
+        # Apply Karen 2.0 filtering
+        c_filtered = c_df[c_df['Admin_Sum'] < 0]  # Cancellations: sum < 0
+        r_filtered = r_df[r_df['Admin_Sum'] > 0]  # Reinstatements: sum > 0
+        
+        st.write(f"📊 **Karen 2.0 Filtered results:**")
         st.write(f"  New Business (filtered): {len(nb_filtered)}")
-        st.write(f"  Cancellations/Reinstatements (filtered): {len(cr_filtered)}")
+        st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
+        st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
         
-        # Select only the columns we need for output
-        needed_columns = [
-            admin_cols[0], admin_cols[1], admin_cols[2], admin_cols[3],  # Admin columns
-            transaction_col,  # Transaction type
-            'Admin_Sum'  # Calculated sum
-        ]
+        # Now create output dataframes with EXACT Karen 2.0 column mapping
+        # Data Set 1 - New Contracts (NB)
+        nb_output = create_karen_output_dataframe(nb_filtered, 'NB', admin_cols, 'New Business')
         
-        # Add other important columns if they exist
-        for col in ['Unnamed: 1', 'Unnamed: 2', 'Unnamed: 3', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 8']:
-            if col in df.columns:
-                needed_columns.append(col)
+        # Data Set 2 - Reinstatements (R)
+        r_output = create_karen_output_dataframe(r_filtered, 'R', admin_cols, 'Reinstatement')
         
-        # Filter dataframes to only include needed columns
-        nb_filtered = nb_filtered[needed_columns]
+        # Data Set 3 - Cancellations (C) - with additional columns
+        c_output = create_karen_output_dataframe(c_filtered, 'C', admin_cols, 'Cancellation', include_cancellation_fields=True)
         
-        # For C/R data, first filter by transaction type, then select columns
-        cancellation_data = cr_df[cr_df[transaction_col] == 'C'][needed_columns]
-        reinstatement_data = cr_df[cr_df[transaction_col] == 'R'][needed_columns]
-        
-        st.write(f"🔍 **Selected columns for output:** {needed_columns}")
-        st.write(f"📊 **Output dataframe shapes:** NB: {nb_filtered.shape}, C: {cancellation_data.shape}, R: {reinstatement_data.shape}")
+        st.write(f"🔍 **Karen 2.0 Output created:**")
+        st.write(f"  New Business: {len(nb_output)} records")
+        st.write(f"  Reinstatements: {len(r_output)} records")
+        st.write(f"  Cancellations: {len(c_output)} records")
+        st.write(f"  Total: {len(nb_output) + len(r_output) + len(c_output)} records")
         
         return {
-            'nb_data': nb_filtered,
-            'cancellation_data': cancellation_data,
-            'reinstatement_data': reinstatement_data,
+            'nb_data': nb_output,
+            'cancellation_data': c_output,
+            'reinstatement_data': r_output,
             'admin_columns': admin_cols,
-            'total_records': len(nb_filtered) + len(cancellation_data) + len(reinstatement_data)
+            'total_records': len(nb_output) + len(c_output) + len(r_output)
         }
         
     except Exception as e:
@@ -345,6 +346,90 @@ def process_transaction_data_karen_v3(df, admin_columns):
         import traceback
         st.code(traceback.format_exc())
         return None
+
+def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, include_cancellation_fields=False):
+    """Create output dataframe with exact Karen 2.0 column mapping."""
+    if len(df) == 0:
+        return pd.DataFrame()
+    
+    # Create new dataframe with exact column order as specified in Karen 2.0 instructions
+    output = pd.DataFrame()
+    
+    # Base columns (same for all transaction types)
+    # B – Insurer Code
+    output['Insurer_Code'] = find_column_by_content_karen(df, ['INSURER', 'INSURER CODE'])
+    # C – Product Type Code
+    output['Product_Type_Code'] = find_column_by_content_karen(df, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+    # D – Coverage Code
+    output['Coverage_Code'] = find_column_by_content_karen(df, ['COVERAGE CODE', 'COVERAGE'])
+    # E – Dealer Number
+    output['Dealer_Number'] = find_column_by_content_karen(df, ['DEALER NUMBER', 'DEALER #'])
+    # F – Dealer Name
+    output['Dealer_Name'] = find_column_by_content_karen(df, ['DEALER NAME', 'DEALER'])
+    # H – Contract Number
+    output['Contract_Number'] = find_column_by_content_karen(df, ['CONTRACT NUMBER', 'CONTRACT #'])
+    # L – Contract Sale Date
+    output['Contract_Sale_Date'] = find_column_by_content_karen(df, ['CONTRACT SALE DATE', 'SALE DATE'])
+    # J – Transaction Date
+    output['Transaction_Date'] = find_column_by_content_karen(df, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+    # M – Transaction Type
+    output['Transaction_Type'] = find_column_by_content_karen(df, ['TRANSACTION TYPE'])
+    # U – Customer Last Name
+    output['Customer_Last_Name'] = find_column_by_content_karen(df, ['LAST NAME', 'CUSTOMER LAST NAME'])
+    
+    # Additional columns for cancellations only
+    if include_cancellation_fields:
+        # Z – Contract Term
+        output['Contract_Term'] = find_column_by_content_karen(df, ['CONTRACT TERM', 'TERM'])
+        # AE – Cancellation Date
+        output['Cancellation_Date'] = find_column_by_content_karen(df, ['CANCELLATION DATE', 'CANCEL DATE'])
+        # AB – Cancellation Reason
+        output['Cancellation_Reason'] = find_column_by_content_karen(df, ['CANCELLATION REASON', 'REASON'])
+        # AA – Cancellation Factor
+        output['Cancellation_Factor'] = find_column_by_content_karen(df, ['CANCELLATION FACTOR', 'FACTOR'])
+    
+    # Admin Amount columns (same for all transaction types)
+    # AO – Admin 3 Amount (Agent NCB Fee)
+    output['Admin_3_Amount_Agent_NCB_Fee'] = df[admin_cols[0]]
+    # AQ – Admin 4 Amount (Dealer NCB Fee)
+    output['Admin_4_Amount_Dealer_NCB_Fee'] = df[admin_cols[1]]
+    # AU – Admin 6 Amount (Agent NCB Offset)
+    output['Admin_6_Amount_Agent_NCB_Offset'] = df[admin_cols[2]]
+    # AW – Admin 7 Amount (Agent NCB Offset Bucket)
+    output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = df[admin_cols[3]]
+    # AY – Admin 8 Amount (Dealer NCB Offset Bucket)
+    output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = df[admin_cols[0]]  # Using available columns
+    # BA – Admin 9 Amount (Agent NCB Offset)
+    output['Admin_9_Amount_Agent_NCB_Offset'] = df[admin_cols[2]]  # Using available columns
+    # BC – Admin 10 Amount (Dealer NCB Offset Bucket)
+    output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = df[admin_cols[3]]  # Using available columns
+    
+    # Add transaction type identifiers
+    output['Transaction_Type'] = transaction_type
+    output['Row_Type'] = row_type
+    
+    return output
+
+def find_column_by_content_karen(df, search_terms):
+    """Find a column by searching for specific content in column names or first few rows."""
+    for col in df.columns:
+        col_str = str(col).upper()
+        # Check column name
+        for term in search_terms:
+            if term.upper() in col_str:
+                return df[col]
+        
+        # Check first few rows for content
+        try:
+            first_values = df[col].astype(str).str.upper().head(10)
+            for term in search_terms:
+                if any(term.upper() in val for val in first_values):
+                    return df[col]
+        except:
+            continue
+    
+    # If not found, return empty series
+    return pd.Series([None] * len(df))
 
 def create_excel_download_karen_v3(df, sheet_name):
     """Create Excel download for a dataframe with Karen 2.0 formatting."""
@@ -507,6 +592,52 @@ def main():
                             file_name=f"Reinstatement_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
+                    
+                    # Karen 2.0: Create Excel file with separate worksheets
+                    st.write("---")
+                    st.subheader("📥 Karen 2.0 Excel Output (3 Separate Worksheets)")
+                    
+                    if st.button("📥 Download Complete Excel File (3 Worksheets)", type="primary"):
+                        try:
+                            # Create Excel file with separate worksheets as specified in Karen 2.0
+                            output = io.BytesIO()
+                            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                                # Data Set 1 - New Contracts (NB)
+                                if len(results['nb_data']) > 0:
+                                    results['nb_data'].to_excel(writer, sheet_name='New_Contracts_NB', index=False)
+                                    st.write(f"✅ **New Contracts worksheet created:** {len(results['nb_data'])} records")
+                                
+                                # Data Set 2 - Reinstatements (R)
+                                if len(results['reinstatement_data']) > 0:
+                                    results['reinstatement_data'].to_excel(writer, sheet_name='Reinstatements_R', index=False)
+                                    st.write(f"✅ **Reinstatements worksheet created:** {len(results['reinstatement_data'])} records")
+                                
+                                # Data Set 3 - Cancellations (C)
+                                if len(results['cancellation_data']) > 0:
+                                    results['cancellation_data'].to_excel(writer, sheet_name='Cancellations_C', index=False)
+                                    st.write(f"✅ **Cancellations worksheet created:** {len(results['cancellation_data'])} records")
+                            
+                            output.seek(0)
+                            
+                            # Create download button for the complete file
+                            st.download_button(
+                                label="📥 Download Complete Excel File (3 Worksheets)",
+                                data=output.getvalue(),
+                                file_name=f"Karen_NCB_v3_Complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                            
+                            st.success(f"✅ **Karen 2.0 Excel file generated successfully!**")
+                            st.write(f"📊 **File contains:**")
+                            st.write(f"  • New Contracts (NB): {len(results['nb_data'])} records")
+                            st.write(f"  • Reinstatements (R): {len(results['reinstatement_data'])} records")
+                            st.write(f"  • Cancellations (C): {len(results['cancellation_data'])} records")
+                            st.write(f"  • **Total:** {results['total_records']} records across 3 worksheets")
+                            st.write(f"  • **Expected:** 2,000-2,500 total records")
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error generating Karen 2.0 Excel file: {str(e)}")
+                            st.write(f"Debug info: {type(e).__name__}")
                 else:
                     st.error("❌ Karen v3.0 processing failed. Check the error messages above.")
 
