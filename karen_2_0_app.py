@@ -27,9 +27,15 @@ def process_excel_data_karen_2_0(uploaded_file):
             if data_sheet_name in excel_data.sheet_names:
                 st.write(f"📋 **Processing {data_sheet_name} Sheet**")
                 
-                # Read the Data sheet
-                df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name)
+                # Read the Data sheet - the first row contains the actual headers
+                df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name, header=None)
                 st.write(f"📏 Data shape: {df.shape}")
+                
+                # The first row (index 0) contains the actual column headers
+                # Let's use that row as our column names
+                df.columns = df.iloc[0]
+                df = df.iloc[1:].reset_index(drop=True)
+                st.write(f"📏 Data shape after header fix: {df.shape}")
                 
                 # Show first few column names to understand structure
                 st.write(f"🔍 **First 20 columns:** {list(df.columns[:20])}")
@@ -93,8 +99,8 @@ def find_ncb_columns_simple(df):
         if 'ADMIN' in col_str and 'AMOUNT' in col_str:
             # Check if this column has numeric values
             try:
-                # Skip the first row (header) and check for numeric values
-                values = df.iloc[1:, i].dropna()
+                # Check for numeric values
+                values = df.iloc[:, i].dropna()
                 if len(values) > 0:
                     numeric_vals = pd.to_numeric(values, errors='coerce')
                     non_zero = (numeric_vals != 0).sum()
@@ -154,6 +160,44 @@ def find_ncb_columns_simple(df):
                         ncb_columns['BC'] = col
                     
                     st.write(f"✅ **Found NCB column by position:** {list(ncb_columns.keys())[-1]} → {col} (Position {pos})")
+    
+    # If we still don't have enough, let's try to find any numeric columns that might be Admin amounts
+    if len(ncb_columns) < 7:
+        st.warning(f"⚠️ **Still only found {len(ncb_columns)} NCB columns. Looking for any numeric columns...**")
+        
+        # Look for any columns that might be numeric and could be Admin amounts
+        for i, col in enumerate(df.columns):
+            if len(ncb_columns) >= 7:
+                break
+                
+            try:
+                # Check if this column has numeric values
+                values = df.iloc[:, i].dropna()
+                if len(values) > 0:
+                    numeric_vals = pd.to_numeric(values, errors='coerce')
+                    non_zero = (numeric_vals != 0).sum()
+                    
+                    # If it has some non-zero numeric values, it might be an Admin amount
+                    if non_zero > 0 and non_zero < len(values) * 0.8:  # Not all zeros, not all non-zero
+                        # Map to the next available NCB column type
+                        if 'AO' not in ncb_columns:
+                            ncb_columns['AO'] = col
+                        elif 'AQ' not in ncb_columns:
+                            ncb_columns['AQ'] = col
+                        elif 'AU' not in ncb_columns:
+                            ncb_columns['AU'] = col
+                        elif 'AW' not in ncb_columns:
+                            ncb_columns['AW'] = col
+                        elif 'AY' not in ncb_columns:
+                            ncb_columns['AY'] = col
+                        elif 'BA' not in ncb_columns:
+                            ncb_columns['BA'] = col
+                        elif 'BC' not in ncb_columns:
+                            ncb_columns['BC'] = col
+                        
+                        st.write(f"✅ **Found potential NCB column by numeric analysis:** {list(ncb_columns.keys())[-1]} → {col} (Position {i})")
+            except Exception as e:
+                continue
     
     return ncb_columns
 
