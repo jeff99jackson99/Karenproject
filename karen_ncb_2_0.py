@@ -203,10 +203,10 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"  Cancellations: {c_mask.sum()}")
     st.write(f"  Reinstatements: {r_mask.sum()}")
     
-    # Process New Business data with proper filtering (revert to working logic)
+    # Process New Business data with the WORKING filtering logic from old version
     nb_df = df[nb_mask].copy()
     
-    # Apply the EXACT filtering logic that was working before
+    # Apply the EXACT filtering logic that was working before (giving ~1200 records)
     if len(label_columns) >= 4:
         # Get the Admin amount columns (assuming they're in order)
         admin_cols = list(label_columns.keys())[:4]
@@ -229,6 +229,8 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
         ]
         
         st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using strict Admin > 0 logic)")
+        st.write(f"  Expected: ~1200 records")
+        st.write(f"  Actual: {len(nb_filtered)} records")
     else:
         nb_filtered = nb_df
         st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
@@ -280,7 +282,7 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     combined_output = pd.concat([nb_output, c_output, r_output], ignore_index=True)
     
     st.write(f"✅ **Output created:** {len(combined_output)} total records")
-    st.write(f"  New Business: {len(nb_output)}")
+    st.write(f"  New Business: {len(nb_output)} (target: ~1200)")
     st.write(f"  Cancellations: {len(c_output)}")
     st.write(f"  Reinstatements: {len(r_output)}")
     
@@ -370,9 +372,9 @@ def main():
                         for trans_type, count in type_counts.items():
                             st.write(f"  {trans_type}: {count} records")
                         
-                        # Show sample data
-                        st.subheader("🔍 Sample Output Data")
-                        st.dataframe(output_data['combined_data'].head(10))
+                        # Show sample data in collapsible section
+                        with st.expander("🔍 **Sample Output Data** (Click to expand)", expanded=False):
+                            st.dataframe(output_data['combined_data'].head(10))
                         
                         # Download buttons for each section
                         st.subheader("💾 Download Results")
