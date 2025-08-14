@@ -193,18 +193,37 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         st.write(f"✅ **Transaction column found:** {transaction_col}")
         
         # Show unique values in transaction column
-        unique_transactions = df[transaction_col].astype(str).unique()
+        unique_transactions = df[transaction_col].iloc[:, 0].astype(str).unique() if df[transaction_col].ndim > 1 else df[transaction_col].astype(str).unique()
         st.write(f"🔍 **Unique transaction values found:** {unique_transactions[:20]}")
         
+        # More flexible transaction type filtering - look for variations
         # Filter by transaction type and NCB amounts according to Karen 2.0 rules
-        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
-        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
-        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
+        nb_mask = df[transaction_col].iloc[:, 0].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW', 'NEW BUSINESS', 'N']) if df[transaction_col].ndim > 1 else df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW', 'NEW BUSINESS', 'N'])
+        c_mask = df[transaction_col].iloc[:, 0].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL', 'CANCELLED', 'CANC']) if df[transaction_col].ndim > 1 else df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL', 'CANCELLED', 'CANC'])
+        r_mask = df[transaction_col].iloc[:, 0].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE', 'REINSTATED']) if df[transaction_col].ndim > 1 else df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE', 'REINSTATED'])
+        
+        # Also check for any other transaction types that might exist
+        other_mask = ~(nb_mask | c_mask | r_mask)
+        other_transactions = df[transaction_col].iloc[:, 0].astype(str)[other_mask].unique() if df[transaction_col].ndim > 1 else df[transaction_col].astype(str)[other_mask].unique()
+        if len(other_transactions) > 0:
+            st.write(f"🔍 **Other transaction types found:** {other_transactions[:10]}")
         
         st.write(f"📊 **Transaction counts:**")
         st.write(f"  New Business: {nb_mask.sum()}")
         st.write(f"  Cancellations: {c_mask.sum()}")
         st.write(f"  Reinstatements: {r_mask.sum()}")
+        st.write(f"  Other/Unknown: {other_mask.sum()}")
+        
+        # Show sample values from each transaction type
+        if nb_mask.sum() > 0:
+            sample_nb = df[transaction_col].iloc[:, 0][nb_mask].astype(str).unique()[:5] if df[transaction_col].ndim > 1 else df[transaction_col][nb_mask].astype(str).unique()[:5]
+            st.write(f"🔍 **Sample NB transactions:** {sample_nb}")
+        if c_mask.sum() > 0:
+            sample_c = df[transaction_col].iloc[:, 0][c_mask].astype(str).unique()[:5] if df[transaction_col].ndim > 1 else df[transaction_col][c_mask].astype(str).unique()[:5]
+            st.write(f"🔍 **Sample C transactions:** {sample_c}")
+        if r_mask.sum() > 0:
+            sample_r = df[transaction_col].iloc[:, 0][r_mask].astype(str).unique()[:5] if df[transaction_col].ndim > 1 else df[transaction_col][r_mask].astype(str).unique()[:5]
+            st.write(f"🔍 **Sample R transactions:** {sample_r}")
         
         # Apply Karen 2.0 filtering rules
         # Data Set 1 (NB): sum > 0
