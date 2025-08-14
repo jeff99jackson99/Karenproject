@@ -184,135 +184,94 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     st.write(f"  Cancellations: {c_mask.sum()}")
     st.write(f"  Reinstatements: {r_mask.sum()}")
     
-    # Process New Business data (positive/empty/0 values expected)
+    # Process New Business data with proper filtering (revert to working logic)
     nb_df = df[nb_mask].copy()
+    
+    # Apply the EXACT filtering logic that was working before
+    if len(label_columns) >= 4:
+        # Get the Admin amount columns (assuming they're in order)
+        admin_cols = list(label_columns.keys())[:4]
+        st.write(f"🔍 **Using Admin columns:** {admin_cols}")
+        
+        # Convert Admin columns to numeric
+        for col in admin_cols:
+            nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
+        
+        # Calculate Admin sum
+        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
+        
+        # Apply the EXACT user requirement: ALL 4 Admin amounts > 0 AND sum > 0
+        nb_filtered = nb_df[
+            (nb_df['Admin_Sum'] > 0) &
+            (nb_df[admin_cols[0]] > 0) &
+            (nb_df[admin_cols[1]] > 0) &
+            (nb_df[admin_cols[2]] > 0) &
+            (nb_df[admin_cols[3]] > 0)
+        ]
+        
+        st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using strict Admin > 0 logic)")
+    else:
+        nb_filtered = nb_df
+        st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
     
     # Process Cancellation data (negative/empty/0 values expected)
     c_df = df[c_mask].copy()
     
+    # Apply filtering for cancellations (sum != 0)
+    if len(label_columns) >= 4:
+        admin_cols = list(label_columns.keys())[:4]
+        for col in admin_cols:
+            c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
+        c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
+        c_filtered = c_df[c_df['Admin_Sum'] != 0]
+        st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
+    else:
+        c_filtered = c_df
+        st.write(f"⚠️ **Using unfiltered Cancellation data:** {len(c_filtered)} records")
+    
     # Process Reinstatement data (positive/empty/0 values expected)
     r_df = df[r_mask].copy()
     
-    # Create the output structure with proper column mapping
-    output_data = []
+    # Apply filtering for reinstatements (sum != 0)
+    if len(label_columns) >= 4:
+        admin_cols = list(label_columns.keys())[:4]
+        for col in admin_cols:
+            r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
+        r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
+        r_filtered = r_df[r_df['Admin_Sum'] != 0]
+        st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
+    else:
+        r_filtered = r_df
+        st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
     
-    # Add New Business records first (as per user requirement for specific order)
-    st.write("🔄 **Processing New Business records...**")
-    for _, row in nb_df.iterrows():
-        record = {
-            'Transaction_Type': 'NB',
-            'Row_Type': 'New Business'
-        }
-        
-        # Add all the mapped columns with proper labels
-        for col_idx, desc in column_mapping.items():
-            if col_idx < len(row):
-                col_name = row.index[col_idx]
-                record[f"Col_{col_idx}_{desc}"] = row[col_name]
-        
-        # Validate NB data: should have positive/empty/0 values for Admin amounts
-        nb_valid = True
-        for label_col_idx in label_columns:
-            if label_col_idx + 1 in amount_columns:  # Check if we have the corresponding amount column
-                amount_col_idx = label_col_idx + 1
-                if amount_col_idx < len(row):
-                    amount_val = row.iloc[amount_col_idx]
-                    try:
-                        amount_val = pd.to_numeric(amount_val, errors='coerce')
-                        if pd.notna(amount_val) and amount_val < 0:
-                            nb_valid = False
-                            break
-                    except:
-                        pass
-        
-        if nb_valid:
-            output_data.append(record)
+    # Create separate dataframes for each transaction type (as in old format)
+    nb_output = nb_filtered.copy()
+    c_output = c_filtered.copy()
+    r_output = r_filtered.copy()
     
-    st.write(f"✅ **New Business records processed:** {len(output_data)}")
+    # Add transaction type identifiers
+    nb_output['Transaction_Type'] = 'NB'
+    nb_output['Row_Type'] = 'New Business'
+    c_output['Transaction_Type'] = 'C'
+    c_output['Row_Type'] = 'Cancellation'
+    r_output['Transaction_Type'] = 'R'
+    r_output['Row_Type'] = 'Reinstatement'
     
-    # Add Cancellation records (negative/empty/0 values expected)
-    st.write("🔄 **Processing Cancellation records...**")
-    for _, row in c_df.iterrows():
-        record = {
-            'Transaction_Type': 'C',
-            'Row_Type': 'Cancellation'
-        }
-        
-        # Add all the mapped columns
-        for col_idx, desc in column_mapping.items():
-            if col_idx < len(row):
-                col_name = row.index[col_idx]
-                record[f"Col_{col_idx}_{desc}"] = row[col_name]
-        
-        # Validate C data: should have negative/empty/0 values for Admin amounts
-        c_valid = True
-        for label_col_idx in label_columns:
-            if label_col_idx + 1 in amount_columns:
-                amount_col_idx = label_col_idx + 1
-                if amount_col_idx < len(row):
-                    amount_val = row.iloc[amount_col_idx]
-                    try:
-                        amount_val = pd.to_numeric(amount_val, errors='coerce')
-                        if pd.notna(amount_val) and amount_val > 0:
-                            c_valid = False
-                            break
-                    except:
-                        pass
-        
-        if c_valid:
-            output_data.append(record)
+    # Create combined output for the main download
+    combined_output = pd.concat([nb_output, c_output, r_output], ignore_index=True)
     
-    st.write(f"✅ **Cancellation records processed:** {len([r for r in output_data if r['Transaction_Type'] == 'C'])}")
+    st.write(f"✅ **Output created:** {len(combined_output)} total records")
+    st.write(f"  New Business: {len(nb_output)}")
+    st.write(f"  Cancellations: {len(c_output)}")
+    st.write(f"  Reinstatements: {len(r_output)}")
     
-    # Add Reinstatement records (positive/empty/0 values expected)
-    st.write("🔄 **Processing Reinstatement records...**")
-    for _, row in r_df.iterrows():
-        record = {
-            'Transaction_Type': 'R',
-            'Row_Type': 'Reinstatement'
-        }
-        
-        # Add all the mapped columns
-        for col_idx, desc in column_mapping.items():
-            if col_idx < len(row):
-                col_name = row.index[col_idx]
-                record[f"Col_{col_idx}_{desc}"] = row[col_name]
-        
-        # Validate R data: should have positive/empty/0 values for Admin amounts
-        r_valid = True
-        for label_col_idx in label_columns:
-            if label_col_idx + 1 in amount_columns:
-                amount_col_idx = label_col_idx + 1
-                if amount_col_idx < len(row):
-                    amount_val = row.iloc[amount_col_idx]
-                    try:
-                        amount_val = pd.to_numeric(amount_val, errors='coerce')
-                        if pd.notna(amount_val) and amount_val < 0:
-                            r_valid = False
-                            break
-                    except:
-                        pass
-        
-        if r_valid:
-            output_data.append(record)
-    
-    st.write(f"✅ **Reinstatement records processed:** {len([r for r in output_data if r['Transaction_Type'] == 'R'])}")
-    
-    # Create output dataframe
-    output_df = pd.DataFrame(output_data)
-    
-    st.write(f"✅ **Output created:** {len(output_df)} total records")
-    st.write(f"  Expected range: 2,000 - 2,500 rows")
-    st.write(f"  Actual output: {len(output_df)} rows")
-    
-    # Show breakdown by transaction type
-    if len(output_df) > 0:
-        type_counts = output_df['Transaction_Type'].value_counts()
-        st.write("📊 **Final breakdown by Transaction Type:**")
-        for trans_type, count in type_counts.items():
-            st.write(f"  {trans_type}: {count} records")
-    
-    return output_df
+    return {
+        'nb_data': nb_output,
+        'cancellation_data': c_output,
+        'reinstatement_data': r_output,
+        'combined_data': combined_output,
+        'total_records': len(combined_output)
+    }
 
 def main():
     st.title("🚀 Karen NCB Data Processor - Iteration 2.0")
@@ -370,47 +329,86 @@ def main():
                     st.write(f"📏 **Data shape:** {df.shape}")
                     
                     # Process data
-                    output_df = process_data_v2(df, column_mapping, label_columns, amount_columns)
+                    output_data = process_data_v2(df, column_mapping, label_columns, amount_columns)
                     
-                    if output_df is not None and len(output_df) > 0:
-                        st.success(f"✅ **Processing Complete!** Generated {len(output_df)} records")
+                    if output_data:
+                        st.success(f"✅ **Processing Complete!** Generated {output_data['total_records']} records")
                         
                         # Display results
                         st.subheader("📊 Processing Results")
-                        st.write(f"**Total Records:** {len(output_df)}")
+                        st.write(f"**Total Records:** {output_data['total_records']}")
                         
                         # Show breakdown by transaction type
-                        type_counts = output_df['Transaction_Type'].value_counts()
+                        type_counts = output_data['combined_data']['Transaction_Type'].value_counts()
                         st.write("**Breakdown by Transaction Type:**")
                         for trans_type, count in type_counts.items():
                             st.write(f"  {trans_type}: {count} records")
                         
                         # Show sample data
                         st.subheader("🔍 Sample Output Data")
-                        st.dataframe(output_df.head(10))
+                        st.dataframe(output_data['combined_data'].head(10))
                         
-                        # Download button
+                        # Download buttons for each section
                         st.subheader("💾 Download Results")
                         
-                        # Create Excel file in memory
-                        output_buffer = io.BytesIO()
-                        with pd.ExcelWriter(output_buffer, engine='xlsxwriter') as writer:
-                            output_df.to_excel(writer, sheet_name='Data', index=False)
+                        # Create Excel files in memory for each section
+                        nb_buffer = io.BytesIO()
+                        c_buffer = io.BytesIO()
+                        r_buffer = io.BytesIO()
                         
-                        output_buffer.seek(0)
+                        with pd.ExcelWriter(nb_buffer, engine='xlsxwriter') as writer:
+                            output_data['nb_data'].to_excel(writer, sheet_name='New_Business', index=False)
+                        with pd.ExcelWriter(c_buffer, engine='xlsxwriter') as writer:
+                            output_data['cancellation_data'].to_excel(writer, sheet_name='Cancellation', index=False)
+                        with pd.ExcelWriter(r_buffer, engine='xlsxwriter') as writer:
+                            output_data['reinstatement_data'].to_excel(writer, sheet_name='Reinstatement', index=False)
                         
-                        # Generate filename with timestamp
+                        # Generate filenames with timestamp
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"Karen_NCB_2_0_Output_{timestamp}.xlsx"
+                        nb_filename = f"Karen_NCB_2_0_New_Business_{timestamp}.xlsx"
+                        c_filename = f"Karen_NCB_2_0_Cancellation_{timestamp}.xlsx"
+                        r_filename = f"Karen_NCB_2_0_Reinstatement_{timestamp}.xlsx"
+                        combined_filename = f"Karen_NCB_2_0_Combined_{timestamp}.xlsx"
                         
+                        # Download buttons for each section
                         st.download_button(
-                            label="📥 Download Excel File",
-                            data=output_buffer.getvalue(),
-                            file_name=filename,
+                            label="📥 Download New Business Excel File",
+                            data=nb_buffer.getvalue(),
+                            file_name=nb_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        st.download_button(
+                            label="📥 Download Cancellation Excel File",
+                            data=c_buffer.getvalue(),
+                            file_name=c_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        st.download_button(
+                            label="📥 Download Reinstatement Excel File",
+                            data=r_buffer.getvalue(),
+                            file_name=r_filename,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                         
-                        st.write(f"📁 **File saved as:** {filename}")
+                        # Create combined download
+                        combined_buffer = io.BytesIO()
+                        with pd.ExcelWriter(combined_buffer, engine='xlsxwriter') as writer:
+                            output_data['combined_data'].to_excel(writer, sheet_name='Combined_Data', index=False)
+                        
+                        combined_buffer.seek(0)
+                        
+                        st.download_button(
+                            label="📥 Download Combined Excel File",
+                            data=combined_buffer.getvalue(),
+                            file_name=combined_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                        
+                        st.write(f"📁 **Files saved as:**")
+                        st.write(f"  New Business: {nb_filename}")
+                        st.write(f"  Cancellation: {c_filename}")
+                        st.write(f"  Reinstatement: {r_filename}")
+                        st.write(f"  Combined: {combined_filename}")
                         
                     else:
                         st.error("❌ No data was processed successfully")
