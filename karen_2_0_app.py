@@ -85,7 +85,7 @@ def find_ncb_columns_simple(df):
     ncb_columns = {}
     
     # Based on the actual file structure, map Admin columns to NCB types
-    # These are the EXACT columns required by Karen 2.0
+    # The actual file has ADMIN 1-10 Amount, we need to map specific ones to Karen 2.0 requirements
     admin_mapping = {
         40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
         42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
@@ -130,34 +130,71 @@ def find_ncb_columns_simple(df):
     return ncb_columns
 
 def find_required_columns_simple(df):
-    """Find required columns by simple position mapping based on actual file structure."""
+    """Find required columns by label matching as required by Karen 2.0."""
     required_cols = {}
     
-    # Based on the actual file structure, map column positions to required columns
-    # These are the EXACT columns required by Karen 2.0
-    position_mapping = {
-        1: 'B',   # Insurer Code - Column 1
-        2: 'C',   # Product Type Code - Column 2
-        3: 'D',   # Coverage Code - Column 3
-        4: 'E',   # Dealer Number - Column 4
-        5: 'F',   # Dealer Name - Column 5
-        7: 'H',   # Contract Number - Column 7
-        11: 'L',  # Contract Sale Date - Column 11
-        8: 'J',   # Transaction Date - Column 8
-        9: 'M',   # Transaction Type - Column 9 (This contains the dropdown values C, R, NB, A)
-        12: 'U',  # Customer Last Name - Column 12
-        19: 'Z',  # Vehicle Class - Column 19 (Term Months)
-        25: 'AA', # Cancellation Factor - Column 25 (Number of Days in Force)
-        26: 'AB', # Cancellation Reason - Column 26
-        27: 'AE', # Cancellation Date - Column 27
-    }
-    
-    # Map by position
+    # Use label matching instead of fixed positions as required by Karen 2.0
+    # Look for columns that match the required labels
     for i, col in enumerate(df.columns):
-        if i in position_mapping:
-            col_letter = position_mapping[i]
-            required_cols[col_letter] = col
-            st.write(f"✅ **Found required column:** {col_letter} ({col}) → {col}")
+        col_str = str(col).upper()
+        
+        # Map columns based on content and common patterns
+        if 'INSURER' in col_str and 'CODE' in col_str:
+            required_cols['B'] = col
+        elif 'PRODUCT' in col_str and 'TYPE' in col_str and 'CODE' in col_str:
+            required_cols['C'] = col
+        elif 'COVERAGE' in col_str and 'CODE' in col_str:
+            required_cols['D'] = col
+        elif 'DEALER' in col_str and 'NUMBER' in col_str:
+            required_cols['E'] = col
+        elif 'DEALER' in col_str and 'NAME' in col_str:
+            required_cols['F'] = col
+        elif 'CONTRACT' in col_str and 'NUMBER' in col_str:
+            required_cols['H'] = col
+        elif 'CONTRACT' in col_str and 'SALE' in col_str and 'DATE' in col_str:
+            required_cols['L'] = col
+        elif 'TRANSACTION' in col_str and 'DATE' in col_str:
+            required_cols['J'] = col
+        elif 'TRANSACTION' in col_str and 'TYPE' in col_str:
+            required_cols['M'] = col
+        elif 'CUSTOMER' in col_str and 'LAST' in col_str and 'NAME' in col_str:
+            required_cols['U'] = col
+        elif 'TERM' in col_str and 'MONTHS' in col_str:
+            required_cols['Z'] = col
+        elif 'NUMBER' in col_str and 'OF' in col_str and 'DAYS' in col_str and 'FORCE' in col_str:
+            required_cols['AA'] = col
+        elif 'CANCELLATION' in col_str and 'REASON' in col_str:
+            required_cols['AB'] = col
+        elif 'CANCELLATION' in col_str and 'DATE' in col_str:
+            required_cols['AE'] = col
+    
+    # If we still don't have enough, try position-based mapping as fallback
+    if len(required_cols) < 10:
+        st.warning(f"⚠️ **Only found {len(required_cols)} required columns by label matching, trying position-based mapping...**")
+        
+        # Fallback to position-based mapping
+        position_mapping = {
+            1: 'B',   # Insurer Code - Column 1
+            2: 'C',   # Product Type Code - Column 2
+            3: 'D',   # Coverage Code - Column 3
+            4: 'E',   # Dealer Number - Column 4
+            5: 'F',   # Dealer Name - Column 5
+            7: 'H',   # Contract Number - Column 7
+            11: 'L',  # Contract Sale Date - Column 11
+            8: 'J',   # Transaction Date - Column 8
+            9: 'M',   # Transaction Type - Column 9
+            12: 'U',  # Customer Last Name - Column 12
+            20: 'Z',  # Term Months - Column 20
+            26: 'AA', # Number of Days in Force - Column 26
+            30: 'AB', # Cancellation Reason - Column 30
+            25: 'AE', # Cancellation Date - Column 25
+        }
+        
+        for pos, col_letter in position_mapping.items():
+            if pos < len(df.columns) and col_letter not in required_cols:
+                col = df.columns[pos]
+                required_cols[col_letter] = col
+                st.write(f"✅ **Found required column by position:** {col_letter} → {col} (Position {pos})")
     
     return required_cols
 
