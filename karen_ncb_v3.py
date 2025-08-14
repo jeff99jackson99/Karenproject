@@ -97,7 +97,7 @@ def analyze_data_structure_debug(df):
             # DEBUG: Show column info
             debug_column_info(df, col, "Column Analysis")
             
-            # STRICT datetime detection
+            # ULTRA-AGGRESSIVE datetime detection
             is_datetime = False
             
             # Check data type
@@ -108,17 +108,35 @@ def analyze_data_structure_debug(df):
                 st.write(f"❌ **REJECTED: datetime-like data type**")
                 is_datetime = True
             
-            # Check column name
+            # Check column name - MORE AGGRESSIVE
             if isinstance(col, pd.Timestamp):
                 st.write(f"❌ **REJECTED: column name is Timestamp**")
+                is_datetime = True
+            elif isinstance(col, datetime):
+                st.write(f"❌ **REJECTED: column name is datetime object**")
                 is_datetime = True
             elif 'datetime' in str(col).lower():
                 st.write(f"❌ **REJECTED: column name contains 'datetime'**")
                 is_datetime = True
+            elif hasattr(col, 'year') or hasattr(col, 'month') or hasattr(col, 'day'):
+                st.write(f"❌ **REJECTED: column name has datetime attributes**")
+                is_datetime = True
+            
+            # Check if column name looks like a date/time
+            col_str = str(col)
+            if any(pattern in col_str for pattern in ['2025-', '2024-', '2023-', '2022-', '2021-', '2020-']):
+                st.write(f"❌ **REJECTED: column name contains year pattern**")
+                is_datetime = True
+            elif any(pattern in col_str for pattern in ['-01-', '-02-', '-03-', '-04-', '-05-', '-06-', '-07-', '-08-', '-09-', '-10-', '-11-', '-12-']):
+                st.write(f"❌ **REJECTED: column name contains month pattern**")
+                is_datetime = True
+            elif ':' in col_str and any(char.isdigit() for char in col_str):
+                st.write(f"❌ **REJECTED: column name contains time pattern**")
+                is_datetime = True
             
             # Check sample data for datetime patterns
             sample_str = str(data_col.head(10).tolist())
-            if any(dt_indicator in sample_str.lower() for dt_indicator in ['datetime', 'timestamp', '2025-', '2024-', '2023-']):
+            if any(dt_indicator in sample_str.lower() for dt_indicator in ['datetime', 'timestamp', '2025-', '2024-', '2023-', '2022-', '2021-', '2020-']):
                 st.write(f"❌ **REJECTED: sample data suggests datetime**")
                 is_datetime = True
             
