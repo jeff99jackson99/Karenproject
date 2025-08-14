@@ -27,25 +27,18 @@ def process_excel_data_karen_2_0(uploaded_file):
             if data_sheet_name in excel_data.sheet_names:
                 st.write(f"📋 **Processing {data_sheet_name} Sheet**")
                 
-                # Read the Data sheet - the first row contains the actual headers
+                # Read the Data sheet - row 12 (index 12) contains the actual headers
                 df = pd.read_excel(uploaded_file, sheet_name=data_sheet_name, header=None)
                 st.write(f"📏 Data shape: {df.shape}")
                 
-                # The first row (index 0) contains the actual column headers
-                # Let's use that row as our column names, but handle nan values
-                header_row = df.iloc[0]
-                st.write(f"🔍 **Header row sample:** {header_row[:10].tolist()}")
+                # Row 12 (index 12) contains the actual column headers with Admin columns
+                header_row = df.iloc[12]
+                st.write(f"🔍 **Header row (Row 12):** {header_row[:20].tolist()}")
                 
-                # Clean up the header row - replace nan with meaningful names
-                clean_headers = []
-                for i, header in enumerate(header_row):
-                    if pd.isna(header) or str(header).strip() == '':
-                        clean_headers.append(f'Column_{i}')
-                    else:
-                        clean_headers.append(str(header).strip())
-                
-                df.columns = clean_headers
-                df = df.iloc[1:].reset_index(drop=True)
+                # Use row 12 as column names
+                df.columns = header_row
+                # Remove rows 0-12 (they're not data) and reset index
+                df = df.iloc[13:].reset_index(drop=True)
                 st.write(f"📏 Data shape after header fix: {df.shape}")
                 
                 # Show first few column names to understand structure
@@ -94,13 +87,13 @@ def find_ncb_columns_simple(df):
     # Based on the actual file structure, map Admin columns to NCB types
     # These are the EXACT columns required by Karen 2.0
     admin_mapping = {
-        40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
-        42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
-        46: 'AU',  # ADMIN 6 Amount (Agent NCB Offset Bucket) - Column 46
-        48: 'AW',  # ADMIN 7 Amount (Agent NCB Offset Bucket) - Column 48
-        50: 'AY',  # ADMIN 8 Amount (Dealer NCB Offset Bucket) - Column 50
-        52: 'BA',  # ADMIN 9 Amount (Agent NCB Offset) - Column 52
-        54: 'BC',  # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
+        36: 'AO',  # ADMIN 1 Amount - Column 36
+        38: 'AQ',  # ADMIN 2 Amount - Column 38
+        40: 'AU',  # ADMIN 3 Amount - Column 40
+        42: 'AW',  # ADMIN 4 Amount - Column 42
+        44: 'AY',  # ADMIN 5 Amount - Column 44
+        46: 'BA',  # ADMIN 6 Amount - Column 46
+        48: 'BC',  # ADMIN 7 Amount - Column 48
     }
     
     # Map Admin columns by their actual positions
@@ -119,7 +112,7 @@ def find_ncb_columns_simple(df):
             try:
                 if 'ADMIN' in str(col) and 'Amount' in str(col):
                     # Check if this column has meaningful values
-                    values = df.iloc[1:, i].dropna()  # Skip header row
+                    values = df.iloc[:, i].dropna()  # Skip header row
                     if len(values) > 0:
                         numeric_vals = pd.to_numeric(values, errors='coerce')
                         non_zero = (numeric_vals != 0).sum()
@@ -148,15 +141,15 @@ def find_required_columns_simple(df):
         3: 'D',   # Coverage Code - Column 3
         4: 'E',   # Dealer Number - Column 4
         5: 'F',   # Dealer Name - Column 5
-        6: 'H',   # Contract Number - Column 6
-        7: 'L',   # Contract Sale Date - Column 7
+        7: 'H',   # Contract Number - Column 7
+        11: 'L',  # Contract Sale Date - Column 11
         8: 'J',   # Transaction Date - Column 8
         9: 'M',   # Transaction Type - Column 9 (This contains the dropdown values C, R, NB, A)
-        10: 'U',  # Customer Last Name - Column 10
-        20: 'Z',  # Contract Term - Column 20 (Term Months)
-        26: 'AA', # Cancellation Factor - Column 26 (Number of Days in Force)
-        27: 'AB', # Cancellation Reason - Column 27
-        28: 'AE', # Cancellation Date - Column 28
+        12: 'U',  # Customer Last Name - Column 12
+        19: 'Z',  # Vehicle Class - Column 19 (Term Months)
+        25: 'AA', # Cancellation Factor - Column 25 (Number of Days in Force)
+        26: 'AB', # Cancellation Reason - Column 26
+        27: 'AE', # Cancellation Date - Column 27
     }
     
     # Map by position
