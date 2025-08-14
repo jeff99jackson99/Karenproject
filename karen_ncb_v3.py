@@ -71,6 +71,12 @@ def analyze_data_structure_clean(df):
             
             # Skip datetime columns - they can't be used for Admin amounts
             if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
+                st.write(f"⚠️ **Skipping datetime column:** {col} (dtype: {data_col.dtype})")
+                continue
+            
+            # Also check if the column name itself looks like a datetime
+            if isinstance(col, pd.Timestamp) or 'datetime' in str(col).lower():
+                st.write(f"⚠️ **Skipping column with datetime name:** {col}")
                 continue
             
             # Try to convert to numeric, handling mixed data types
@@ -154,6 +160,10 @@ def analyze_data_structure_clean(df):
                     if data_col.dtype == 'datetime64[ns]' or 'datetime' in str(data_col.dtype):
                         continue
                         
+                    # Also check if the column name itself looks like a datetime
+                    if isinstance(col, pd.Timestamp) or 'datetime' in str(col).lower():
+                        continue
+                        
                     numeric_data = pd.to_numeric(data_col, errors='coerce')
                     if not numeric_data.isna().all():
                         non_zero_count = (numeric_data != 0).sum()
@@ -189,8 +199,31 @@ def analyze_data_structure_clean(df):
             st.error(f"❌ **Alternative detection also failed. Need 4 Admin columns**")
             return None
     
-    # Select the 4 best Admin columns
-    selected_admin_cols = admin_candidates[:4]
+    # Final validation: ensure all selected columns are actually numeric
+    st.write("🔄 **Final validation of Admin columns...**")
+    validated_admin_cols = []
+    
+    for candidate in admin_candidates[:4]:
+        col = candidate['column']
+        try:
+            # Test if we can actually use this column for numeric operations
+            data_col = df[col].iloc[1:]  # Skip header
+            numeric_data = pd.to_numeric(data_col, errors='coerce')
+            
+            if not numeric_data.isna().all():
+                validated_admin_cols.append(candidate)
+                st.write(f"✅ **Validated Admin column:** {col} - numeric data confirmed")
+            else:
+                st.write(f"⚠️ **Rejected Admin column:** {col} - not numeric")
+        except Exception as e:
+            st.write(f"⚠️ **Rejected Admin column:** {col} - error: {str(e)}")
+    
+    if len(validated_admin_cols) < 4:
+        st.error(f"❌ **Only {len(validated_admin_cols)} Admin columns passed validation. Need 4.**")
+        return None
+    
+    # Select the 4 best validated Admin columns
+    selected_admin_cols = validated_admin_cols[:4]
     
     admin_columns = {
         'Admin 3': selected_admin_cols[0]['column'],
