@@ -12,7 +12,7 @@ import io
 st.set_page_config(page_title="Karen NCB 2.0", page_icon="🚀", layout="wide")
 
 def detect_column_structure_v2(excel_file):
-    """Detect column structure from Col Ref sheet for version 2.0."""
+    """Detect column structure from Col Ref sheet for version 2.0 - using working logic from first version."""
     try:
         # First, let's see what sheets are available
         excel_data = pd.ExcelFile(excel_file)
@@ -29,26 +29,7 @@ def detect_column_structure_v2(excel_file):
         
         if not col_ref_sheet:
             st.error(f"❌ Could not find Col Ref sheet. Available sheets: {excel_data.sheet_names}")
-            st.write("🔍 **Looking for alternative reference sheets...**")
-            
-            # Try to find any sheet that might contain column information
-            for sheet_name in excel_data.sheet_names:
-                if not any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'summary']):
-                    st.write(f"🔍 **Checking sheet:** {sheet_name}")
-                    try:
-                        test_df = pd.read_excel(excel_file, sheet_name=sheet_name)
-                        # Look for Admin or NCB content in this sheet
-                        content_str = ' '.join([str(val) for val in test_df.values.flatten() if pd.notna(val)]).upper()
-                        if any(keyword in content_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                            st.write(f"✅ **Found potential reference sheet:** {sheet_name}")
-                            col_ref_sheet = sheet_name
-                            break
-                    except:
-                        continue
-            
-            if not col_ref_sheet:
-                st.error("❌ No suitable reference sheet found. Please ensure your Excel file has a 'Col Ref' sheet or similar.")
-                return {}, {}, {}
+            return {}, {}, {}
         
         st.write(f"✅ **Using reference sheet:** {col_ref_sheet}")
         
@@ -59,126 +40,111 @@ def detect_column_structure_v2(excel_file):
         st.write(f"🔍 **Reference sheet first few rows:**")
         st.dataframe(col_ref_df.head(10))
         
-        # Look for the specific Admin column structure
+        # Use the EXACT working logic from the first version
         column_mapping = {}
-        label_columns = {}
-        amount_columns = {}
+        admin_columns = {}
         
-        # Search through all rows for Admin column information
+        # Look for the row that contains column descriptions
         for idx, row in col_ref_df.iterrows():
-            row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
-            
-            # Check if this row contains Admin column information
-            if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                st.write(f"🔍 **Found potential Admin row {idx}:** {row_str[:100]}...")
-                
-                # Look for Admin columns in this row
+            if 'Admin' in str(row.iloc[2]) or 'NCB' in str(row.iloc[7]):
+                # This is the row with column descriptions
                 for col_idx, value in enumerate(row):
                     if pd.notna(value) and str(value).strip():
                         desc = str(value).strip()
                         column_mapping[col_idx] = desc
                         
-                        # Check if this is an Admin Label column
-                        if any(keyword in desc.upper() for keyword in ['ADMIN', 'NCB']) and 'AMOUNT' not in desc.upper():
-                            label_columns[col_idx] = desc
-                            st.write(f"  ✅ **Found Label column:** {desc} at position {col_idx}")
-                            
-                            # Look for the corresponding Amount column (next column over)
-                            if col_idx + 1 < len(row):
-                                next_col_val = row.iloc[col_idx + 1]
-                                if pd.notna(next_col_val) and str(next_col_val).strip():
-                                    next_desc = str(next_col_val).strip()
-                                    if 'AMOUNT' in next_desc.upper():
-                                        amount_columns[col_idx + 1] = next_desc
-                                        st.write(f"    ✅ **Found Amount column:** {next_desc} at position {col_idx + 1}")
-                
-                # If we found Admin columns, we can stop searching
-                if label_columns:
-                    break
+                        # Use the EXACT working logic from first version
+                        if 'Admin' in desc or 'NCB' in desc:
+                            if 'Amount' in desc or 'Fee' in desc:
+                                # This is an Admin amount column
+                                if 'Agent' in desc:
+                                    admin_columns['Admin 3'] = col_idx
+                                elif 'Dealer' in desc:
+                                    admin_columns['Admin 4'] = col_idx
+                                elif 'Offset' in desc:
+                                    if 'Agent' in desc:
+                                        admin_columns['Admin 9'] = col_idx
+                                    elif 'Dealer' in desc:
+                                        admin_columns['Admin 10'] = col_idx
+                break
         
-        # If we still don't have Admin columns, try a different approach
-        if not label_columns:
-            st.write("🔄 **Trying alternative Admin column detection...**")
+        # If we don't have enough admin columns, try to find them by content analysis (working logic from first version)
+        if len(admin_columns) < 4:
+            st.warning("⚠️ Could not identify all Admin columns from mapping, trying content-based detection...")
             
-            # Look for columns that contain "Admin" in their names
-            for col_idx, col_name in enumerate(col_ref_df.columns):
-                if pd.notna(col_name) and 'ADMIN' in str(col_name).upper():
-                    st.write(f"🔍 **Found Admin column:** {col_name} at position {col_idx}")
+            # Look for columns that might contain Admin amounts by analyzing their content
+            potential_admin_cols = []
+            
+            # Read the main data sheet to analyze column content
+            data_sheet = None
+            for sheet in excel_data.sheet_names:
+                if sheet != col_ref_sheet and not any(keyword in sheet.lower() for keyword in ['summary', 'xref', 'ref', 'col']):
+                    data_sheet = sheet
+                    break
+            
+            if data_sheet:
+                df = pd.read_excel(excel_file, sheet_name=data_sheet)
+                
+                for col in df.columns:
+                    try:
+                        # Skip datetime columns
+                        if isinstance(col, pd.Timestamp) or 'datetime' in str(type(col)).lower():
+                            continue
+                            
+                        # Try to convert to numeric
+                        numeric_values = pd.to_numeric(df[col], errors='coerce')
+                        if not numeric_values.isna().all() and numeric_values.dtype in ['int64', 'float64']:
+                            # Check if this column has meaningful non-zero values
+                            non_zero_count = (numeric_values > 0).sum()
+                            total_count = len(numeric_values)
+                            
+                            # Only consider columns with a reasonable number of non-zero values
+                            if non_zero_count > 0 and non_zero_count < total_count * 0.9:  # Not all zeros, not all non-zero
+                                potential_admin_cols.append({
+                                    'column': col,
+                                    'non_zero_count': non_zero_count,
+                                    'total_count': total_count,
+                                    'non_zero_ratio': non_zero_count / total_count
+                                })
+                    except:
+                        pass
+                
+                # Sort by non-zero ratio to find the most likely Admin columns
+                potential_admin_cols.sort(key=lambda x: x['non_zero_ratio'], reverse=True)
+                
+                st.write(f"🔍 **Potential Admin columns found:** {len(potential_admin_cols)}")
+                for i, col_info in enumerate(potential_admin_cols[:10]):  # Show top 10
+                    st.write(f"  {i+1}. {col_info['column']}: {col_info['non_zero_count']}/{col_info['total_count']} non-zero ({col_info['non_zero_ratio']:.1%})")
+                
+                # Select the top 4 columns as Admin columns
+                if len(potential_admin_cols) >= 4:
+                    admin_columns = {
+                        'Admin 3': potential_admin_cols[0]['column'],
+                        'Admin 4': potential_admin_cols[1]['column'], 
+                        'Admin 9': potential_admin_cols[2]['column'],
+                        'Admin 10': potential_admin_cols[3]['column']
+                    }
                     
-                    # Check if this column contains Admin information
-                    col_values = col_ref_df[col_name].dropna()
-                    for val in col_values:
-                        if pd.notna(val) and str(val).strip():
-                            desc = str(val).strip()
-                            if any(keyword in desc.upper() for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']) and 'AMOUNT' not in desc.upper():
-                                label_columns[col_idx] = desc
-                                st.write(f"  ✅ **Found Label value:** {desc}")
-                                
-                                # Look for corresponding Amount column
-                                if col_idx + 1 < len(col_ref_df.columns):
-                                    next_col = col_ref_df.columns[col_idx + 1]
-                                    if pd.notna(next_col) and 'AMOUNT' in str(next_col).upper():
-                                        amount_columns[col_idx + 1] = str(next_col)
-                                        st.write(f"    ✅ **Found Amount column:** {next_col}")
-                                break
+                    st.write(f"✅ **Admin columns assigned by content analysis:**")
+                    for admin_type, col_name in admin_columns.items():
+                        st.write(f"  {admin_type}: {col_name}")
+                else:
+                    st.error(f"❌ Not enough potential Admin columns found. Need 4, found {len(potential_admin_cols)}")
         
-        if label_columns:
+        if admin_columns:
             st.write("🔍 **Column Structure Detected:**")
             st.write(f"  Total columns mapped: {len(column_mapping)}")
-            st.write(f"  Label columns found: {len(label_columns)}")
-            st.write(f"  Amount columns found: {len(amount_columns)}")
+            st.write(f"  Admin columns found: {len(admin_columns)}")
             
             st.write("🔍 **Admin column mappings:**")
-            for col_idx, desc in label_columns.items():
-                st.write(f"  {desc}: Column {col_idx}")
-                if col_idx + 1 in amount_columns:
-                    st.write(f"    Amount: Column {col_idx + 1}")
+            for admin_type, col_idx in admin_columns.items():
+                st.write(f"  {admin_type}: Column {col_idx}")
+                if col_idx in column_mapping:
+                    st.write(f"    Description: {column_mapping[col_idx]}")
             
-            # Show sample of the actual data structure
-            st.write("🔍 **Sample data structure from reference sheet:**")
-            sample_data = []
-            for col_idx in sorted(label_columns.keys()):
-                if col_idx < len(col_ref_df.columns):
-                    col_name = col_ref_df.columns[col_idx]
-                    sample_data.append(f"Col{col_idx}({col_name}): {label_columns[col_idx]}")
-            st.write("  " + " | ".join(sample_data))
-            
-            return column_mapping, label_columns, amount_columns
+            return column_mapping, admin_columns, {}
         else:
             st.warning("⚠️ No Admin column mapping found in reference sheet")
-            st.write("🔍 **Debugging: Let's examine the reference sheet more carefully...**")
-            
-            # Show more detailed information about the reference sheet
-            st.write("🔍 **All column names in reference sheet:**")
-            for i, col_name in enumerate(col_ref_df.columns):
-                st.write(f"  Column {i}: {col_name}")
-            
-            st.write("🔍 **Sample values from first few rows:**")
-            for i in range(min(5, len(col_ref_df))):
-                row_data = []
-                for j, val in enumerate(col_ref_df.iloc[i]):
-                    if pd.notna(val) and str(val).strip():
-                        row_data.append(f"Col{j}:{str(val).strip()}")
-                if row_data:
-                    st.write(f"  Row {i}: {' | '.join(row_data[:10])}")
-            
-            # Try to find any Admin-related content
-            st.write("🔍 **Searching for Admin content in all cells...**")
-            admin_content = []
-            for i in range(min(10, len(col_ref_df))):
-                for j, val in enumerate(col_ref_df.iloc[i]):
-                    if pd.notna(val) and str(val).strip():
-                        val_str = str(val).strip().upper()
-                        if any(keyword in val_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
-                            admin_content.append(f"Row{i}Col{j}: {str(val).strip()}")
-            
-            if admin_content:
-                st.write("🔍 **Found Admin-related content:**")
-                for content in admin_content[:20]:  # Show first 20
-                    st.write(f"  {content}")
-            else:
-                st.write("❌ **No Admin-related content found in reference sheet**")
-            
             return {}, {}, {}
         
     except Exception as e:
@@ -208,7 +174,7 @@ def find_transaction_column(df):
     
     return transaction_col
 
-def process_data_v2(df, column_mapping, label_columns, amount_columns):
+def process_data_v2(df, column_mapping, admin_columns, amount_columns):
     """Process data according to version 2.0 requirements - using working logic from first version."""
     
     # Find transaction column
@@ -233,17 +199,33 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     nb_df = df[nb_mask].copy()
     
     # Apply the EXACT filtering logic that was working before (giving ~1200 records)
-    # Use the working approach from the first version
-    if len(label_columns) >= 4:
-        # Get the Admin columns in the correct order
-        admin_cols = list(label_columns.keys())[:4]
-        st.write(f"🔍 **Using Admin columns:** {admin_cols}")
+    if len(admin_columns) >= 4:
+        # Get the admin column names using the working logic from first version
+        admin_cols = [
+            admin_columns.get('Admin 3'),
+            admin_columns.get('Admin 4'), 
+            admin_columns.get('Admin 9'),
+            admin_columns.get('Admin 10')
+        ]
         
-        # Convert Admin columns to numeric (this was working in first version)
+        # Remove None values
+        admin_cols = [col for col in admin_cols if col is not None]
+        
+        if len(admin_cols) < 4:
+            st.error(f"❌ Need exactly 4 Admin columns, found {len(admin_cols)}")
+            return None
+        
+        st.write(f"✅ **Processing with Admin columns:** {admin_cols}")
+        
+        # Convert admin columns to numeric (working logic from first version)
         for col in admin_cols:
-            nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
+            if col in df.columns:
+                nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
+            else:
+                st.error(f"❌ Column {col} not found in data")
+                return None
         
-        # Calculate Admin sum (this was working in first version)
+        # Calculate sum of admin amounts (working logic from first version)
         nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
         
         # Apply the EXACT user requirement: ALL 4 Admin amounts > 0 AND sum > 0
@@ -263,19 +245,30 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     else:
         nb_filtered = nb_df
         st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
-        st.write(f"  Reason: Only found {len(label_columns)} Admin columns, need 4")
+        st.write(f"  Reason: Only found {len(admin_columns)} Admin columns, need 4")
     
     # Process Cancellation data (negative/empty/0 values expected)
     c_df = df[c_mask].copy()
     
     # Apply filtering for cancellations (sum != 0) - this was working
-    if len(label_columns) >= 4:
-        admin_cols = list(label_columns.keys())[:4]
-        for col in admin_cols:
-            c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
-        c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
-        c_filtered = c_df[c_df['Admin_Sum'] != 0]
-        st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
+    if len(admin_columns) >= 4:
+        admin_cols = [
+            admin_columns.get('Admin 3'),
+            admin_columns.get('Admin 4'), 
+            admin_columns.get('Admin 9'),
+            admin_columns.get('Admin 10')
+        ]
+        admin_cols = [col for col in admin_cols if col is not None]
+        
+        if len(admin_cols) >= 4:
+            for col in admin_cols:
+                c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
+            c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
+            c_filtered = c_df[c_df['Admin_Sum'] != 0]
+            st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
+        else:
+            c_filtered = c_df
+            st.write(f"⚠️ **Using unfiltered Cancellation data:** {len(c_filtered)} records")
     else:
         c_filtered = c_df
         st.write(f"⚠️ **Using unfiltered Cancellation data:** {len(c_filtered)} records")
@@ -284,13 +277,24 @@ def process_data_v2(df, column_mapping, label_columns, amount_columns):
     r_df = df[r_mask].copy()
     
     # Apply filtering for reinstatements (sum != 0) - this was working
-    if len(label_columns) >= 4:
-        admin_cols = list(label_columns.keys())[:4]
-        for col in admin_cols:
-            r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
-        r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
-        r_filtered = r_df[r_df['Admin_Sum'] != 0]
-        st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
+    if len(admin_columns) >= 4:
+        admin_cols = [
+            admin_columns.get('Admin 3'),
+            admin_columns.get('Admin 4'), 
+            admin_columns.get('Admin 9'),
+            admin_columns.get('Admin 10')
+        ]
+        admin_cols = [col for col in admin_cols if col is not None]
+        
+        if len(admin_cols) >= 4:
+            for col in admin_cols:
+                r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
+            r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
+            r_filtered = r_df[r_df['Admin_Sum'] != 0]
+            st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
+        else:
+            r_filtered = r_df
+            st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
     else:
         r_filtered = r_df
         st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
@@ -376,7 +380,7 @@ def main():
             
             with st.spinner("🔍 Analyzing file structure..."):
                 # Detect column structure
-                column_mapping, label_columns, amount_columns = detect_column_structure_v2(uploaded_file)
+                column_mapping, admin_columns, amount_columns = detect_column_structure_v2(uploaded_file)
                 
                 if not column_mapping:
                     st.error("❌ Could not detect column structure. Please ensure file has a reference sheet (Col Ref, xref, etc.).")
@@ -408,7 +412,7 @@ def main():
                     st.write(f"📏 **Data shape:** {df.shape}")
                     
                     # Process data
-                    output_data = process_data_v2(df, column_mapping, label_columns, amount_columns)
+                    output_data = process_data_v2(df, column_mapping, admin_columns, amount_columns)
                     
                     if output_data:
                         st.success(f"✅ **Processing Complete!** Generated {output_data['total_records']} records")
