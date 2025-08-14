@@ -32,8 +32,19 @@ def process_excel_data_karen_2_0(uploaded_file):
                 st.write(f"📏 Data shape: {df.shape}")
                 
                 # The first row (index 0) contains the actual column headers
-                # Let's use that row as our column names
-                df.columns = df.iloc[0]
+                # Let's use that row as our column names, but handle nan values
+                header_row = df.iloc[0]
+                st.write(f"🔍 **Header row sample:** {header_row[:10].tolist()}")
+                
+                # Clean up the header row - replace nan with meaningful names
+                clean_headers = []
+                for i, header in enumerate(header_row):
+                    if pd.isna(header) or str(header).strip() == '':
+                        clean_headers.append(f'Column_{i}')
+                    else:
+                        clean_headers.append(str(header).strip())
+                
+                df.columns = clean_headers
                 df = df.iloc[1:].reset_index(drop=True)
                 st.write(f"📏 Data shape after header fix: {df.shape}")
                 
@@ -91,6 +102,11 @@ def find_ncb_columns_simple(df):
     st.write(f"🔍 **Found {len(admin_candidates)} potential Admin/Amount columns:**")
     for pos, col, col_str in admin_candidates[:15]:  # Show first 15
         st.write(f"  Position {pos}: {col} (Content: {col_str})")
+    
+    # Let's also show all column names to understand the structure
+    st.write("🔍 **All column names (first 30):**")
+    for i, col in enumerate(df.columns[:30]):
+        st.write(f"  Position {i}: {col}")
     
     # Let's be more flexible and find Admin columns by content, not just position
     # Look for columns that contain "ADMIN" and "Amount" in their names
