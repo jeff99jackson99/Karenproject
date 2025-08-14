@@ -1,16 +1,437 @@
 #!/usr/bin/env python3
 """
 Karen NCB Data Processor - Version 3.0
-Comprehensive debugger version to fix all issues
+Super Smart Data Mapping System with Intelligent Column Discovery
 """
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime
 import io
 import traceback
+import re
 
 st.set_page_config(page_title="Karen NCB v3.0", page_icon="🚀", layout="wide")
+
+class SmartColumnMapper:
+    """Super intelligent column mapping system that learns from data patterns."""
+    
+    def __init__(self, df):
+        self.df = df
+        self.data_df = df.iloc[1:].copy()  # Skip header row
+        self.column_analysis = {}
+        self.admin_columns = {}
+        self.transaction_column = None
+        
+    def analyze_all_columns(self):
+        """Comprehensive analysis of all columns to understand their nature."""
+        st.write("🧠 **Starting Super Smart Column Analysis...**")
+        
+        for col in self.df.columns:
+            self.analyze_single_column(col)
+        
+        st.write(f"✅ **Analyzed {len(self.df.columns)} columns**")
+        return self.column_analysis
+    
+    def analyze_single_column(self, col):
+        """Deep analysis of a single column to determine its type and purpose."""
+        try:
+            col_data = self.data_df[col]
+            
+            analysis = {
+                'column_name': col,
+                'data_type': str(col_data.dtype),
+                'total_rows': len(col_data),
+                'non_null_count': col_data.count(),
+                'null_percentage': (col_data.isna().sum() / len(col_data)) * 100,
+                'unique_values': col_data.nunique(),
+                'is_datetime': False,
+                'is_numeric': False,
+                'is_categorical': False,
+                'is_transaction_type': False,
+                'is_admin_amount': False,
+                'confidence_score': 0.0,
+                'sample_values': [],
+                'patterns': [],
+                'recommendations': []
+            }
+            
+            # Check if it's a datetime column
+            if self._is_datetime_column(col, col_data):
+                analysis['is_datetime'] = True
+                analysis['confidence_score'] += 0.1
+            
+            # Check if it's numeric
+            if self._is_numeric_column(col_data):
+                analysis['is_numeric'] = True
+                analysis['confidence_score'] += 0.2
+                
+                # Check if it looks like financial data
+                if self._looks_like_financial_data(col_data):
+                    analysis['is_admin_amount'] = True
+                    analysis['confidence_score'] += 0.3
+                    analysis['recommendations'].append("Potential Admin amount column")
+            
+            # Check if it's categorical
+            if self._is_categorical_column(col_data):
+                analysis['is_categorical'] = True
+                analysis['confidence_score'] += 0.1
+            
+            # Check if it's transaction type
+            if self._is_transaction_type_column(col_data):
+                analysis['is_transaction_type'] = True
+                analysis['confidence_score'] += 0.4
+                analysis['recommendations'].append("Transaction Type column detected")
+            
+            # Get sample values
+            analysis['sample_values'] = col_data.dropna().head(5).tolist()
+            
+            # Detect patterns
+            analysis['patterns'] = self._detect_patterns(col_data)
+            
+            self.column_analysis[col] = analysis
+            
+        except Exception as e:
+            st.write(f"❌ **Error analyzing column {col}: {str(e)}**")
+    
+    def _is_datetime_column(self, col_name, col_data):
+        """Smart datetime detection that avoids false positives."""
+        # Check column name
+        col_str = str(col_name).lower()
+        if any(pattern in col_str for pattern in ['datetime', 'timestamp', 'date', 'time']):
+            return True
+        
+        # Check for actual datetime objects
+        if col_data.dtype == 'datetime64[ns]':
+            return True
+        
+        # Check for datetime-like patterns in data
+        sample_str = str(col_data.head(10).tolist())
+        if any(pattern in sample_str for pattern in ['2025-', '2024-', '2023-', '2022-', '2021-', '2020-']):
+            return True
+        
+        return False
+    
+    def _is_numeric_column(self, col_data):
+        """Smart numeric detection with tolerance for mixed data."""
+        try:
+            # Try to convert to numeric
+            numeric_data = pd.to_numeric(col_data, errors='coerce')
+            non_null_count = numeric_data.notna().sum()
+            
+            # Consider it numeric if at least 70% of values convert successfully
+            return (non_null_count / len(col_data)) > 0.7
+        except:
+            return False
+    
+    def _looks_like_financial_data(self, col_data):
+        """Detect if numeric column contains financial data patterns."""
+        try:
+            numeric_data = pd.to_numeric(col_data, errors='coerce')
+            
+            # Check for financial patterns
+            has_decimals = (numeric_data % 1 != 0).any()
+            has_negative = (numeric_data < 0).any()
+            has_large_values = (abs(numeric_data) > 1000).any()
+            
+            # Financial data typically has these characteristics
+            return has_decimals or has_negative or has_large_values
+        except:
+            return False
+    
+    def _is_categorical_column(self, col_data):
+        """Detect categorical columns."""
+        unique_ratio = col_data.nunique() / len(col_data)
+        return unique_ratio < 0.1  # Less than 10% unique values
+    
+    def _is_transaction_type_column(self, col_data):
+        """Smart detection of transaction type columns."""
+        try:
+            # Convert to string and look for transaction codes
+            str_vals = col_data.astype(str).str.upper().str.strip()
+            
+            # Count transaction codes
+            nb_count = str_vals.str.contains('NB', na=False).sum()
+            c_count = str_vals.str.contains('C', na=False).sum()
+            r_count = str_vals.str.contains('R', na=False).sum()
+            
+            total_transactions = nb_count + c_count + r_count
+            total_rows = len(str_vals)
+            
+            # Consider it a transaction column if it has significant transaction codes
+            return total_transactions > 0 and (total_transactions / total_rows) > 0.05
+        except:
+            return False
+    
+    def _detect_patterns(self, col_data):
+        """Detect various patterns in the data."""
+        patterns = []
+        
+        try:
+            # Check for constant values
+            if col_data.nunique() == 1:
+                patterns.append("Constant value")
+            
+            # Check for sequential numbers
+            if self._is_sequential(col_data):
+                patterns.append("Sequential numbers")
+            
+            # Check for currency patterns
+            if self._has_currency_patterns(col_data):
+                patterns.append("Currency patterns")
+            
+            # Check for percentage patterns
+            if self._has_percentage_patterns(col_data):
+                patterns.append("Percentage patterns")
+                
+        except:
+            pass
+        
+        return patterns
+    
+    def _is_sequential(self, col_data):
+        """Check if column contains sequential numbers."""
+        try:
+            numeric_data = pd.to_numeric(col_data, errors='coerce')
+            if numeric_data.isna().all():
+                return False
+            
+            # Check if values are roughly sequential
+            sorted_vals = numeric_data.dropna().sort_values()
+            if len(sorted_vals) < 3:
+                return False
+            
+            # Check if differences are roughly constant
+            diffs = sorted_vals.diff().dropna()
+            if len(diffs) == 0:
+                return False
+            
+            # If 80% of differences are the same, consider it sequential
+            most_common_diff = diffs.mode().iloc[0] if not diffs.mode().empty else 0
+            same_diff_count = (diffs == most_common_diff).sum()
+            
+            return (same_diff_count / len(diffs)) > 0.8
+        except:
+            return False
+    
+    def _has_currency_patterns(self, col_data):
+        """Check for currency-like patterns."""
+        try:
+            str_data = col_data.astype(str)
+            has_dollar_sign = str_data.str.contains('$', na=False).any()
+            has_commas = str_data.str.contains(',', na=False).any()
+            has_parentheses = str_data.str.contains(r'[()]', na=False).any()
+            
+            return has_dollar_sign or has_commas or has_parentheses
+        except:
+            return False
+    
+    def _has_percentage_patterns(self, col_data):
+        """Check for percentage-like patterns."""
+        try:
+            str_data = col_data.astype(str)
+            has_percent = str_data.str.contains('%', na=False).any()
+            
+            if has_percent:
+                return True
+            
+            # Check if values are between 0 and 1 (potential percentages)
+            numeric_data = pd.to_numeric(col_data, errors='coerce')
+            if not numeric_data.isna().all():
+                in_range = ((numeric_data >= 0) & (numeric_data <= 1)).sum()
+                return (in_range / numeric_data.notna().sum()) > 0.5
+            
+            return False
+        except:
+            return False
+    
+    def find_transaction_column(self):
+        """Find the transaction type column using multiple strategies."""
+        st.write("🔍 **Finding Transaction Type Column...**")
+        
+        # Strategy 1: Look for columns marked as transaction type
+        transaction_candidates = []
+        for col, analysis in self.column_analysis.items():
+            if analysis['is_transaction_type']:
+                transaction_candidates.append((col, analysis['confidence_score']))
+        
+        if transaction_candidates:
+            # Sort by confidence score
+            transaction_candidates.sort(key=lambda x: x[1], reverse=True)
+            best_candidate = transaction_candidates[0]
+            
+            st.write(f"✅ **Found Transaction Type column:** {best_candidate[0]} (confidence: {best_candidate[1]:.2f})")
+            self.transaction_column = best_candidate[0]
+            return best_candidate[0]
+        
+        # Strategy 2: Look for columns with transaction codes in sample data
+        st.write("🔄 **Strategy 1 failed, trying content-based detection...**")
+        
+        for col in self.df.columns:
+            try:
+                sample_data = self.data_df[col].dropna().head(100)
+                str_vals = sample_data.astype(str).str.upper().str.strip()
+                
+                nb_count = str_vals.str.contains('NB', na=False).sum()
+                c_count = str_vals.str.contains('C', na=False).sum()
+                r_count = str_vals.str.contains('R', na=False).sum()
+                
+                total_transactions = nb_count + c_count + r_count
+                if total_transactions > 10:  # Need significant number of transaction codes
+                    st.write(f"✅ **Found Transaction Type column by content:** {col}")
+                    st.write(f"   Sample counts: NB={nb_count}, C={c_count}, R={r_count}")
+                    self.transaction_column = col
+                    return col
+                    
+            except Exception as e:
+                continue
+        
+        st.error("❌ **Could not find Transaction Type column**")
+        return None
+    
+    def find_admin_columns(self):
+        """Find Admin columns using multiple intelligent strategies."""
+        st.write("🔍 **Finding Admin Columns with Super Smart Detection...**")
+        
+        # Strategy 1: Look for columns marked as admin amounts
+        admin_candidates = []
+        for col, analysis in self.column_analysis.items():
+            if analysis['is_admin_amount'] and analysis['is_numeric']:
+                admin_candidates.append({
+                    'column': col,
+                    'confidence': analysis['confidence_score'],
+                    'non_null_count': analysis['non_null_count'],
+                    'unique_values': analysis['unique_values']
+                })
+        
+        # Strategy 2: Look for columns with financial patterns
+        if len(admin_candidates) < 4:
+            st.write("🔄 **Strategy 1 found insufficient columns, trying pattern detection...**")
+            
+            for col, analysis in self.column_analysis.items():
+                if analysis['is_numeric'] and col not in [c['column'] for c in admin_candidates]:
+                    # Check for financial characteristics
+                    col_data = self.data_df[col]
+                    numeric_data = pd.to_numeric(col_data, errors='coerce')
+                    
+                    if not numeric_data.isna().all():
+                        # Calculate financial metrics
+                        non_zero_count = (numeric_data != 0).sum()
+                        total_count = numeric_data.notna().sum()
+                        has_negative = (numeric_data < 0).any()
+                        has_decimals = (numeric_data % 1 != 0).any()
+                        
+                        # Score based on financial characteristics
+                        financial_score = 0
+                        if non_zero_count > 5:
+                            financial_score += 0.3
+                        if has_negative:
+                            financial_score += 0.2
+                        if has_decimals:
+                            financial_score += 0.2
+                        if total_count > 100:
+                            financial_score += 0.3
+                        
+                        if financial_score > 0.5:  # Only include if it looks financial
+                            admin_candidates.append({
+                                'column': col,
+                                'confidence': financial_score,
+                                'non_null_count': total_count,
+                                'unique_values': analysis['unique_values']
+                            })
+        
+        # Strategy 3: Look for columns by name/content if still insufficient
+        if len(admin_candidates) < 4:
+            st.write("🔄 **Strategy 2 found insufficient columns, trying name-based detection...**")
+            
+            for col, analysis in self.column_analysis.items():
+                if analysis['is_numeric'] and col not in [c['column'] for c in admin_candidates]:
+                    col_str = str(col).lower()
+                    
+                    # Look for financial keywords in column names
+                    financial_keywords = ['admin', 'amount', 'fee', 'ncb', 'agent', 'dealer', 'cost', 'price', 'value']
+                    if any(keyword in col_str for keyword in financial_keywords):
+                        admin_candidates.append({
+                            'column': col,
+                            'confidence': 0.4,  # Lower confidence for name-based detection
+                            'non_null_count': analysis['non_null_count'],
+                            'unique_values': analysis['unique_values']
+                        })
+        
+        # Sort by confidence and select the best 4
+        admin_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        if len(admin_candidates) < 4:
+            st.error(f"❌ **Only found {len(admin_candidates)} Admin columns, need 4**")
+            return None
+        
+        # Select the top 4
+        selected_admin_cols = admin_candidates[:4]
+        
+        # Map to Admin column names
+        admin_names = ['Admin 3', 'Admin 4', 'Admin 9', 'Admin 10']
+        self.admin_columns = {}
+        
+        for i, candidate in enumerate(selected_admin_cols):
+            admin_name = admin_names[i]
+            self.admin_columns[admin_name] = candidate['column']
+            
+            st.write(f"✅ **{admin_name}:** {candidate['column']} (confidence: {candidate['confidence']:.2f})")
+            st.write(f"   Non-null: {candidate['non_null_count']}, Unique: {candidate['unique_values']}")
+        
+        return self.admin_columns
+    
+    def get_column_summary(self):
+        """Get a summary of all column analysis."""
+        st.write("📊 **Column Analysis Summary**")
+        
+        # Group columns by type
+        datetime_cols = [col for col, analysis in self.column_analysis.items() if analysis['is_datetime']]
+        numeric_cols = [col for col, analysis in self.column_analysis.items() if analysis['is_numeric']]
+        categorical_cols = [col for col, analysis in self.column_analysis.items() if analysis['is_categorical']]
+        admin_cols = [col for col, analysis in self.column_analysis.items() if analysis['is_admin_amount']]
+        
+        st.write(f"  - Datetime columns: {len(datetime_cols)}")
+        st.write(f"  - Numeric columns: {len(numeric_cols)}")
+        st.write(f"  - Categorical columns: {len(categorical_cols)}")
+        st.write(f"  - Admin amount columns: {len(admin_cols)}")
+        
+        if datetime_cols:
+            st.write(f"  - Datetime columns: {datetime_cols[:3]}...")
+        if admin_cols:
+            st.write(f"  - Admin columns: {admin_cols[:3]}...")
+
+def analyze_data_structure_smart(df):
+    """Super smart data structure analysis using the intelligent mapper."""
+    st.write("🧠 **Starting Super Smart Data Structure Analysis...**")
+    
+    # Initialize the smart mapper
+    mapper = SmartColumnMapper(df)
+    
+    # Analyze all columns
+    mapper.analyze_all_columns()
+    
+    # Get column summary
+    mapper.get_column_summary()
+    
+    # Find transaction column
+    transaction_col = mapper.find_transaction_column()
+    if not transaction_col:
+        return None
+    
+    # Find admin columns
+    admin_columns = mapper.find_admin_columns()
+    if not admin_columns:
+        return None
+    
+    st.write("✅ **Super Smart Analysis Complete!**")
+    
+    return {
+        'transaction_col': transaction_col,
+        'admin_columns': admin_columns,
+        'mapper': mapper
+    }
 
 def debug_column_info(df, col_name, step_name):
     """Comprehensive column debugging function."""
@@ -51,167 +472,6 @@ def debug_column_info(df, col_name, step_name):
         st.write(f"  - Error in debug: {str(e)}")
     
     st.write("---")
-
-def analyze_data_structure_debug(df):
-    """Debug version of data structure analysis."""
-    st.write("🔍 **Starting DEBUG data structure analysis...**")
-    
-    # Step 1: Find the transaction type column
-    transaction_col = None
-    st.write("🔄 **Step 1: Finding Transaction Type column...**")
-    
-    for col in df.columns:
-        try:
-            # Get sample data and check for transaction types
-            sample_data = df[col].dropna().iloc[1:].head(500)
-            if len(sample_data) > 0:
-                str_vals = [str(val).upper().strip() for val in sample_data]
-                nb_count = str_vals.count('NB')
-                c_count = str_vals.count('C')
-                r_count = str_vals.count('R')
-                
-                if (nb_count > 0 or c_count > 0 or r_count > 0) and (nb_count + c_count + r_count) > len(sample_data) * 0.1:
-                    transaction_col = col
-                    st.write(f"✅ **Found Transaction Type column:** {col}")
-                    st.write(f"   Sample counts: NB={nb_count}, C={c_count}, R={r_count}")
-                    break
-        except Exception as e:
-            continue
-    
-    if not transaction_col:
-        st.error("❌ **Could not find Transaction Type column**")
-        return None
-    
-    # Step 2: Find Admin columns with comprehensive debugging
-    st.write("🔄 **Step 2: Finding Admin columns with DEBUG...**")
-    
-    admin_candidates = []
-    
-    for col in df.columns:
-        st.write(f"🔍 **Analyzing column:** {col}")
-        
-        try:
-            # Skip the header row
-            data_col = df[col].iloc[1:]
-            
-            # DEBUG: Show column info
-            debug_column_info(df, col, "Column Analysis")
-            
-            # ULTRA-AGGRESSIVE datetime detection
-            is_datetime = False
-            
-            # Check data type
-            if data_col.dtype == 'datetime64[ns]':
-                st.write(f"❌ **REJECTED: datetime64 data type**")
-                is_datetime = True
-            elif 'datetime' in str(data_col.dtype).lower():
-                st.write(f"❌ **REJECTED: datetime-like data type**")
-                is_datetime = True
-            
-            # Check column name - MORE AGGRESSIVE
-            if isinstance(col, pd.Timestamp):
-                st.write(f"❌ **REJECTED: column name is Timestamp**")
-                is_datetime = True
-            elif isinstance(col, datetime):
-                st.write(f"❌ **REJECTED: column name is datetime object**")
-                is_datetime = True
-            elif 'datetime' in str(col).lower():
-                st.write(f"❌ **REJECTED: column name contains 'datetime'**")
-                is_datetime = True
-            elif hasattr(col, 'year') or hasattr(col, 'month') or hasattr(col, 'day'):
-                st.write(f"❌ **REJECTED: column name has datetime attributes**")
-                is_datetime = True
-            
-            # Check if column name looks like a date/time
-            col_str = str(col)
-            if any(pattern in col_str for pattern in ['2025-', '2024-', '2023-', '2022-', '2021-', '2020-']):
-                st.write(f"❌ **REJECTED: column name contains year pattern**")
-                is_datetime = True
-            elif any(pattern in col_str for pattern in ['-01-', '-02-', '-03-', '-04-', '-05-', '-06-', '-07-', '-08-', '-09-', '-10-', '-11-', '-12-']):
-                st.write(f"❌ **REJECTED: column name contains month pattern**")
-                is_datetime = True
-            elif ':' in col_str and any(char.isdigit() for char in col_str):
-                # More specific time pattern detection - avoid rejecting "Unnamed: X"
-                if not col_str.startswith('Unnamed:') and not col_str.startswith('Col_'):
-                    # Check if it looks like actual time (HH:MM:SS or similar)
-                    time_parts = col_str.split(':')
-                    if len(time_parts) >= 2 and all(part.strip().isdigit() for part in time_parts[:2]):
-                        st.write(f"❌ **REJECTED: column name contains time pattern**")
-                        is_datetime = True
-            
-            # Check sample data for datetime patterns
-            sample_str = str(data_col.head(10).tolist())
-            if any(dt_indicator in sample_str.lower() for dt_indicator in ['datetime', 'timestamp', '2025-', '2024-', '2023-', '2022-', '2021-', '2020-']):
-                st.write(f"❌ **REJECTED: sample data suggests datetime**")
-                is_datetime = True
-            
-            if is_datetime:
-                st.write(f"🚫 **Column {col} REJECTED as datetime**")
-                continue
-            
-            # Try numeric conversion
-            numeric_data = pd.to_numeric(data_col, errors='coerce')
-            
-            if not numeric_data.isna().all():
-                non_zero_count = (numeric_data != 0).sum()
-                total_count = len(numeric_data.dropna())
-                
-                if non_zero_count > 5 and total_count > 10:
-                    admin_candidates.append({
-                        'column': col,
-                        'non_zero_count': non_zero_count,
-                        'total_count': total_count,
-                        'ratio': non_zero_count / total_count,
-                        'mean': numeric_data.mean(),
-                        'std': numeric_data.std(),
-                        'sample_values': numeric_data.dropna().head(5).tolist()
-                    })
-                    st.write(f"✅ **Column {col} ACCEPTED as Admin column**")
-                else:
-                    st.write(f"⚠️ **Column {col} rejected: insufficient data**")
-            else:
-                st.write(f"⚠️ **Column {col} rejected: not numeric**")
-                
-        except Exception as e:
-            st.write(f"❌ **Error analyzing column {col}: {str(e)}**")
-            continue
-        
-        st.write("---")
-    
-    # Sort by ratio
-    admin_candidates.sort(key=lambda x: x['ratio'], reverse=True)
-    
-    st.write(f"🔍 **Found {len(admin_candidates)} potential Admin columns:**")
-    for i, candidate in enumerate(admin_candidates[:10]):
-        st.write(f"  {i+1}. {candidate['column']}: {candidate['non_zero_count']}/{candidate['total_count']} non-zero ({candidate['ratio']:.1%})")
-        st.write(f"     Mean: {candidate['mean']:.2f}, Std: {candidate['std']:.2f}")
-        st.write(f"     Sample: {candidate['sample_values']}")
-    
-    if len(admin_candidates) < 4:
-        st.error(f"❌ **Not enough Admin columns found. Need 4, found {len(admin_candidates)}**")
-        return None
-    
-    # Select the 4 best Admin columns
-    selected_admin_cols = admin_candidates[:4]
-    
-    admin_columns = {
-        'Admin 3': selected_admin_cols[0]['column'],
-        'Admin 4': selected_admin_cols[1]['column'],
-        'Admin 9': selected_admin_cols[2]['column'],
-        'Admin 10': selected_admin_cols[3]['column']
-    }
-    
-    st.write(f"✅ **Selected Admin columns:**")
-    for admin_type, col_name in admin_columns.items():
-        st.write(f"  {admin_type}: {col_name}")
-        # Final debug check
-        debug_column_info(df, col_name, f"Final Selection - {admin_type}")
-    
-    return {
-        'transaction_col': transaction_col,
-        'admin_columns': admin_columns,
-        'admin_candidates': admin_candidates
-    }
 
 def find_column_simple(df, search_terms, fallback_position=None):
     """Simple, reliable column finding."""
@@ -348,7 +608,7 @@ def process_data_debug(df):
         st.write("🔍 **Starting DEBUG data processing...**")
         
         # Analyze data structure
-        structure_info = analyze_data_structure_debug(df)
+        structure_info = analyze_data_structure_smart(df)
         if not structure_info:
             st.error("❌ **Could not analyze data structure**")
             return None
