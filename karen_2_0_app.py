@@ -259,11 +259,20 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             'Admin 10 Amount (Dealer NCB Offset Bucket)'
         ]
         
-        r_headers = nb_headers.copy()
+        # Data Set 2 (R) - Different headers as per Karen 2.0 specifications
+        r_headers = [
+            'Insurer', 'Product Type', 'Coverage Code', 'Dealer Number', 'Dealer Name',
+            'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
+            'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
+            'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
+            'Admin 8 Amount (Dealer NCB Offset Bucket)', 'Admin 9 Amount (Agent NCB Offset)',
+            'Admin 10 Amount (Dealer NCB Offset Bucket)'
+        ]
         
+        # Data Set 3 (C) - Different headers as per Karen 2.0 specifications
         c_headers = [
-            'Insurer Code', 'Product Type Code', 'Coverage Code', 'Dealer Number', 'Dealer Name',
-            'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Customer Last Name',
+            'Insurer', 'Product Type', 'Coverage Code', 'Dealer Number', 'Dealer Name',
+            'Contract Number', 'Contract Sale Date', 'Transaction Date', 'Transaction Type', 'Last Name',
             'Contract Term', 'Cancellation Date', 'Cancellation Reason', 'Cancellation Factor',
             'Admin 3 Amount (Agent NCB Fee)', 'Admin 4 Amount (Dealer NCB Fee)',
             'Admin 6 Amount (Agent NCB Offset Bucket)', 'Admin 7 Amount (Agent NCB Offset Bucket)',
