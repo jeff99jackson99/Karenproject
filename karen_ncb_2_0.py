@@ -175,30 +175,78 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         'Agent NCB Offset', 'Agent NCB Offset Bucket', 'Dealer NCB Offset', 'Dealer NCB Offset Bucket'
     ]
     
-    # Find label columns and their corresponding amount columns
-    label_amount_pairs = []
-    for i, col in enumerate(df.columns):
-        col_str = str(col).strip()
-        for label in ncbi_labels:
-            if label.lower() in col_str.lower():
-                # Found a label column, get the next column for the amount
-                if i + 1 < len(df.columns):
-                    amount_col = df.columns[i + 1]
-                    label_amount_pairs.append({
-                        'label_col': col,
-                        'amount_col': amount_col,
-                        'label_name': label
-                    })
-                    st.write(f"✅ **Found NCB pair:** {col} → {amount_col} ({label})")
-                break
+    # First, try to find Admin columns from the reference sheet mapping
+    if admin_columns and len(admin_columns) >= 2:
+        st.write(f"✅ **Using Admin columns from reference sheet:** {admin_columns}")
+        
+        # Convert admin column indices to actual column names
+        amount_cols = []
+        for admin_type, col_idx in admin_columns.items():
+            if col_idx < len(df.columns):
+                amount_cols.append(df.columns[col_idx])
+                st.write(f"  {admin_type}: {df.columns[col_idx]} (column {col_idx})")
+        
+        if len(amount_cols) >= 2:
+            st.write(f"✅ **Using Admin amount columns:** {amount_cols}")
+        else:
+            st.write("⚠️ **Not enough Admin columns found, trying label matching...**")
+            amount_cols = []
     
-    if len(label_amount_pairs) < 4:
-        st.error(f"❌ Need at least 4 NCB label-amount pairs, found {len(label_amount_pairs)}")
+    # If no Admin columns from reference sheet, try label matching
+    if not amount_cols:
+        st.write("🔄 **Searching for NCB label-amount pairs in data...**")
+        
+        # Look for label columns and their corresponding amount columns
+        label_amount_pairs = []
+        for i, col in enumerate(df.columns):
+            col_str = str(col).strip()
+            
+            # Check if this column contains any NCB labels
+            for label in ncbi_labels:
+                if label.lower() in col_str.lower():
+                    # Found a label column, get the next column for the amount
+                    if i + 1 < len(df.columns):
+                        amount_col = df.columns[i + 1]
+                        label_amount_pairs.append({
+                            'label_col': col,
+                            'amount_col': amount_col,
+                            'label_name': label
+                        })
+                        st.write(f"✅ **Found NCB pair:** {col} → {amount_col} ({label})")
+                    break
+        
+        if label_amount_pairs:
+            amount_cols = [pair['amount_col'] for pair in label_amount_pairs]
+            st.write(f"✅ **Using NCB amount columns from label matching:** {amount_cols}")
+        else:
+            # Last resort: try to find numeric columns that might be Admin amounts
+            st.write("🔄 **Trying to find numeric Admin columns...**")
+            
+            numeric_cols = []
+            for col in df.columns:
+                try:
+                    # Check if column contains numeric data
+                    sample_data = df[col].dropna().head(100)
+                    if len(sample_data) > 0:
+                        numeric_count = pd.to_numeric(sample_data, errors='coerce').notna().sum()
+                        if numeric_count > len(sample_data) * 0.5:  # At least 50% numeric
+                            numeric_cols.append(col)
+                except:
+                    continue
+            
+            if len(numeric_cols) >= 4:
+                # Take the first 4 numeric columns as Admin columns
+                amount_cols = numeric_cols[:4]
+                st.write(f"✅ **Using numeric columns as Admin amounts:** {amount_cols}")
+            else:
+                st.error(f"❌ Could not find Admin amount columns")
+                return None
+    
+    if len(amount_cols) < 2:
+        st.error(f"❌ Need at least 2 Admin amount columns, found {len(amount_cols)}")
         return None
     
-    # Get the amount columns for filtering
-    amount_cols = [pair['amount_col'] for pair in label_amount_pairs]
-    st.write(f"✅ **Using amount columns for filtering:** {amount_cols}")
+    st.write(f"✅ **Final Admin amount columns for filtering:** {amount_cols}")
     
     # Process New Business data (NB) - sum > 0
     nb_df = df[nb_mask].copy()
@@ -267,10 +315,10 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         nb_output['Transaction_Type'] = find_column_by_content(nb_filtered, ['TRANSACTION TYPE'])
         nb_output['Customer_Last_Name'] = find_column_by_content(nb_filtered, ['LAST NAME', 'CUSTOMER LAST NAME'])
         
-        # Add NCB amount columns in order
-        for i, pair in enumerate(label_amount_pairs):
-            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
-            nb_output[col_name] = nb_filtered[pair['amount_col']]
+        # Add Admin amount columns
+        for i, col in enumerate(amount_cols):
+            col_name = f"Admin_Amount_{i+1}"
+            nb_output[col_name] = nb_filtered[col]
         
         nb_output['Transaction_Type'] = 'NB'
         nb_output['Row_Type'] = 'New Business'
@@ -290,10 +338,10 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         r_output['Transaction_Type'] = find_column_by_content(r_filtered, ['TRANSACTION TYPE'])
         r_output['Customer_Last_Name'] = find_column_by_content(r_filtered, ['LAST NAME', 'CUSTOMER LAST NAME'])
         
-        # Add NCB amount columns in order
-        for i, pair in enumerate(label_amount_pairs):
-            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
-            r_output[col_name] = r_filtered[pair['amount_col']]
+        # Add Admin amount columns
+        for i, col in enumerate(amount_cols):
+            col_name = f"Admin_Amount_{i+1}"
+            r_output[col_name] = r_filtered[col]
         
         r_output['Transaction_Type'] = 'R'
         r_output['Row_Type'] = 'Reinstatement'
@@ -319,10 +367,10 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         c_output['Cancellation_Reason'] = find_column_by_content(c_filtered, ['CANCELLATION REASON', 'REASON'])
         c_output['Cancellation_Factor'] = find_column_by_content(c_filtered, ['CANCELLATION FACTOR', 'FACTOR'])
         
-        # Add NCB amount columns in order
-        for i, pair in enumerate(label_amount_pairs):
-            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
-            c_output[col_name] = c_filtered[pair['amount_col']]
+        # Add Admin amount columns
+        for i, col in enumerate(amount_cols):
+            col_name = f"Admin_Amount_{i+1}"
+            c_output[col_name] = c_filtered[col]
         
         c_output['Transaction_Type'] = 'C'
         c_output['Row_Type'] = 'Cancellation'
