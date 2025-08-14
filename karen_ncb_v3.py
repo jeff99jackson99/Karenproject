@@ -365,8 +365,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Insurer_Code'] = insurer_col
         st.write(f"✅ **Found Insurer Code column:** {insurer_col.name if hasattr(insurer_col, 'name') else 'Series'}")
     else:
-        output['Insurer_Code'] = None
-        st.write(f"⚠️ **Insurer Code column not found or empty**")
+        # Try to use the first column that might contain insurer data
+        if len(df.columns) > 1:
+            output['Insurer_Code'] = df.iloc[:, 1]  # Column B position
+            st.write(f"⚠️ **Using fallback position for Insurer Code:** Column 1")
+        else:
+            output['Insurer_Code'] = None
+            st.write(f"⚠️ **Insurer Code column not found or empty**")
     
     # C – Product Type Code
     product_col = find_column_by_content_karen(df, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
@@ -374,8 +379,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Product_Type_Code'] = product_col
         st.write(f"✅ **Found Product Type Code column:** {product_col.name if hasattr(product_col, 'name') else 'Series'}")
     else:
-        output['Product_Type_Code'] = None
-        st.write(f"⚠️ **Product Type Code column not found or empty**")
+        # Try to use the second column that might contain product type data
+        if len(df.columns) > 2:
+            output['Product_Type_Code'] = df.iloc[:, 2]  # Column C position
+            st.write(f"⚠️ **Using fallback position for Product Type Code:** Column 2")
+        else:
+            output['Product_Type_Code'] = None
+            st.write(f"⚠️ **Product Type Code column not found or empty**")
     
     # D – Coverage Code
     coverage_col = find_column_by_content_karen(df, ['COVERAGE CODE', 'COVERAGE'])
@@ -383,8 +393,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Coverage_Code'] = coverage_col
         st.write(f"✅ **Found Coverage Code column:** {coverage_col.name if hasattr(coverage_col, 'name') else 'Series'}")
     else:
-        output['Coverage_Code'] = None
-        st.write(f"⚠️ **Coverage Code column not found or empty**")
+        # Try to use the third column that might contain coverage data
+        if len(df.columns) > 3:
+            output['Coverage_Code'] = df.iloc[:, 3]  # Column D position
+            st.write(f"⚠️ **Using fallback position for Coverage Code:** Column 3")
+        else:
+            output['Coverage_Code'] = None
+            st.write(f"⚠️ **Coverage Code column not found or empty**")
     
     # E – Dealer Number
     dealer_num_col = find_column_by_content_karen(df, ['DEALER NUMBER', 'DEALER #'])
@@ -392,8 +407,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Dealer_Number'] = dealer_num_col
         st.write(f"✅ **Found Dealer Number column:** {dealer_num_col.name if hasattr(dealer_num_col, 'name') else 'Series'}")
     else:
-        output['Dealer_Number'] = None
-        st.write(f"⚠️ **Dealer Number column not found or empty**")
+        # Try to use the fourth column that might contain dealer number data
+        if len(df.columns) > 4:
+            output['Dealer_Number'] = df.iloc[:, 4]  # Column E position
+            st.write(f"⚠️ **Using fallback position for Dealer Number:** Column 4")
+        else:
+            output['Dealer_Number'] = None
+            st.write(f"⚠️ **Dealer Number column not found or empty**")
     
     # F – Dealer Name
     dealer_name_col = find_column_by_content_karen(df, ['DEALER NAME', 'DEALER'])
@@ -401,8 +421,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Dealer_Name'] = dealer_name_col
         st.write(f"✅ **Found Dealer Name column:** {dealer_name_col.name if hasattr(dealer_name_col, 'name') else 'Series'}")
     else:
-        output['Dealer_Name'] = None
-        st.write(f"⚠️ **Dealer Name column not found or empty**")
+        # Try to use the fifth column that might contain dealer name data
+        if len(df.columns) > 5:
+            output['Dealer_Name'] = df.iloc[:, 5]  # Column F position
+            st.write(f"⚠️ **Using fallback position for Dealer Name:** Column 5")
+        else:
+            output['Dealer_Name'] = None
+            st.write(f"⚠️ **Dealer Name column not found or empty**")
     
     # H – Contract Number
     contract_col = find_column_by_content_karen(df, ['CONTRACT NUMBER', 'CONTRACT #'])
@@ -410,8 +435,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Contract_Number'] = contract_col
         st.write(f"✅ **Found Contract Number column:** {contract_col.name if hasattr(contract_col, 'name') else 'Series'}")
     else:
-        output['Contract_Number'] = None
-        st.write(f"⚠️ **Contract Number column not found or empty**")
+        # Try to use the seventh column that might contain contract number data
+        if len(df.columns) > 7:
+            output['Contract_Number'] = df.iloc[:, 7]  # Column H position
+            st.write(f"⚠️ **Using fallback position for Contract Number:** Column 7")
+        else:
+            output['Contract_Number'] = None
+            st.write(f"⚠️ **Contract Number column not found or empty**")
     
     # L – Contract Sale Date
     sale_date_col = find_column_by_content_karen(df, ['CONTRACT SALE DATE', 'SALE DATE'])
@@ -419,8 +449,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Contract_Sale_Date'] = sale_date_col
         st.write(f"✅ **Found Contract Sale Date column:** {sale_date_col.name if hasattr(sale_date_col, 'name') else 'Series'}")
     else:
-        output['Contract_Sale_Date'] = None
-        st.write(f"⚠️ **Contract Sale Date column not found or empty**")
+        # Try to use the eleventh column that might contain sale date data
+        if len(df.columns) > 11:
+            output['Contract_Sale_Date'] = df.iloc[:, 11]  # Column L position
+            st.write(f"⚠️ **Using fallback position for Contract Sale Date:** Column 11")
+        else:
+            output['Contract_Sale_Date'] = None
+            st.write(f"⚠️ **Contract Sale Date column not found or empty**")
     
     # J – Transaction Date
     trans_date_col = find_column_by_content_karen(df, ['TRANSACTION DATE', 'ACTIVATION DATE'])
@@ -428,8 +463,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Transaction_Date'] = trans_date_col
         st.write(f"✅ **Found Transaction Date column:** {trans_date_col.name if hasattr(trans_date_col, 'name') else 'Series'}")
     else:
-        output['Transaction_Date'] = None
-        st.write(f"⚠️ **Transaction Date column not found or empty**")
+        # Try to use the ninth column that might contain transaction date data
+        if len(df.columns) > 9:
+            output['Transaction_Date'] = df.iloc[:, 9]  # Column J position
+            st.write(f"⚠️ **Using fallback position for Transaction Date:** Column 9")
+        else:
+            output['Transaction_Date'] = None
+            st.write(f"⚠️ **Transaction Date column not found or empty**")
     
     # M – Transaction Type
     trans_type_col = find_column_by_content_karen(df, ['TRANSACTION TYPE'])
@@ -437,8 +477,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Transaction_Type'] = trans_type_col
         st.write(f"✅ **Found Transaction Type column:** {trans_type_col.name if hasattr(trans_type_col, 'name') else 'Series'}")
     else:
-        output['Transaction_Type'] = None
-        st.write(f"⚠️ **Transaction Type column not found or empty**")
+        # Try to use the twelfth column that might contain transaction type data
+        if len(df.columns) > 12:
+            output['Transaction_Type'] = df.iloc[:, 12]  # Column M position
+            st.write(f"⚠️ **Using fallback position for Transaction Type:** Column 12")
+        else:
+            output['Transaction_Type'] = None
+            st.write(f"⚠️ **Transaction Type column not found or empty**")
     
     # U – Customer Last Name
     last_name_col = find_column_by_content_karen(df, ['LAST NAME', 'CUSTOMER LAST NAME'])
@@ -446,8 +491,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
         output['Customer_Last_Name'] = last_name_col
         st.write(f"✅ **Found Customer Last Name column:** {last_name_col.name if hasattr(last_name_col, 'name') else 'Series'}")
     else:
-        output['Customer_Last_Name'] = None
-        st.write(f"⚠️ **Customer Last Name column not found or empty**")
+        # Try to use the twentieth column that might contain last name data
+        if len(df.columns) > 20:
+            output['Customer_Last_Name'] = df.iloc[:, 20]  # Column U position
+            st.write(f"⚠️ **Using fallback position for Customer Last Name:** Column 20")
+        else:
+            output['Customer_Last_Name'] = None
+            st.write(f"⚠️ **Customer Last Name column not found or empty**")
     
     # Additional columns for cancellations only
     if include_cancellation_fields:
@@ -457,8 +507,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
             output['Contract_Term'] = term_col
             st.write(f"✅ **Found Contract Term column:** {term_col.name if hasattr(term_col, 'name') else 'Series'}")
         else:
-            output['Contract_Term'] = None
-            st.write(f"⚠️ **Contract Term column not found or empty**")
+            # Try to use the twenty-fifth column that might contain contract term data
+            if len(df.columns) > 25:
+                output['Contract_Term'] = df.iloc[:, 25]  # Column Z position
+                st.write(f"⚠️ **Using fallback position for Contract Term:** Column 25")
+            else:
+                output['Contract_Term'] = None
+                st.write(f"⚠️ **Contract Term column not found or empty**")
         
         # AE – Cancellation Date
         cancel_date_col = find_column_by_content_karen(df, ['CANCELLATION DATE', 'CANCEL DATE'])
@@ -466,8 +521,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
             output['Cancellation_Date'] = cancel_date_col
             st.write(f"✅ **Found Cancellation Date column:** {cancel_date_col.name if hasattr(cancel_date_col, 'name') else 'Series'}")
         else:
-            output['Cancellation_Date'] = None
-            st.write(f"⚠️ **Cancellation Date column not found or empty**")
+            # Try to use the thirtieth column that might contain cancellation date data
+            if len(df.columns) > 30:
+                output['Cancellation_Date'] = df.iloc[:, 30]  # Column AE position
+                st.write(f"⚠️ **Using fallback position for Cancellation Date:** Column 30")
+            else:
+                output['Cancellation_Date'] = None
+                st.write(f"⚠️ **Cancellation Date column not found or empty**")
         
         # AB – Cancellation Reason
         reason_col = find_column_by_content_karen(df, ['CANCELLATION REASON', 'REASON'])
@@ -475,8 +535,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
             output['Cancellation_Reason'] = reason_col
             st.write(f"✅ **Found Cancellation Reason column:** {reason_col.name if hasattr(reason_col, 'name') else 'Series'}")
         else:
-            output['Cancellation_Reason'] = None
-            st.write(f"⚠️ **Cancellation Reason column not found or empty**")
+            # Try to use the twenty-seventh column that might contain cancellation reason data
+            if len(df.columns) > 27:
+                output['Cancellation_Reason'] = df.iloc[:, 27]  # Column AB position
+                st.write(f"⚠️ **Using fallback position for Cancellation Reason:** Column 27")
+            else:
+                output['Cancellation_Reason'] = None
+                st.write(f"⚠️ **Cancellation Reason column not found or empty**")
         
         # AA – Cancellation Factor
         factor_col = find_column_by_content_karen(df, ['CANCELLATION FACTOR', 'FACTOR'])
@@ -484,8 +549,13 @@ def create_karen_output_dataframe(df, transaction_type, admin_cols, row_type, in
             output['Cancellation_Factor'] = factor_col
             st.write(f"✅ **Found Cancellation Factor column:** {factor_col.name if hasattr(factor_col, 'name') else 'Series'}")
         else:
-            output['Cancellation_Factor'] = None
-            st.write(f"⚠️ **Cancellation Factor column not found or empty**")
+            # Try to use the twenty-sixth column that might contain cancellation factor data
+            if len(df.columns) > 26:
+                output['Cancellation_Factor'] = df.iloc[:, 26]  # Column AA position
+                st.write(f"⚠️ **Using fallback position for Cancellation Factor:** Column 26")
+            else:
+                output['Cancellation_Factor'] = None
+                st.write(f"⚠️ **Cancellation Factor column not found or empty**")
     
     # Admin Amount columns (same for all transaction types)
     # AO – Admin 3 Amount (Agent NCB Fee)
@@ -564,6 +634,26 @@ def find_column_by_content_karen(df, search_terms):
                     col_name = df.columns[pos]
                     st.write(f"✅ **Found column by position:** {col_name} at position {pos} for '{term}'")
                     return df[col_name]
+    
+    # Last resort: try to find any column that might contain relevant data
+    st.write(f"🔄 **Trying last resort search...**")
+    for col in df.columns:
+        try:
+            # Check if this column has meaningful data (not all None/NaN)
+            sample_data = df[col].dropna().head(20)
+            if len(sample_data) > 0:
+                # Check if this looks like the type of data we're looking for
+                if 'INSURER' in search_terms and any(str(val).isdigit() for val in sample_data[:5]):
+                    st.write(f"✅ **Found potential Insurer column by data pattern:** {col}")
+                    return df[col]
+                elif 'PRODUCT TYPE' in search_terms and any(str(val).isalpha() for val in sample_data[:5]):
+                    st.write(f"✅ **Found potential Product Type column by data pattern:** {col}")
+                    return df[col]
+                elif 'DEALER' in search_terms and any(str(val).isalnum() for val in sample_data[:5]):
+                    st.write(f"✅ **Found potential Dealer column by data pattern:** {col}")
+                    return df[col]
+        except Exception as e:
+            continue
     
     st.write(f"❌ **No column found for:** {search_terms}")
     return None
