@@ -31,6 +31,7 @@ class KarenNCBProcessor:
         # Use the working logic: look for columns with clear NB, C, R patterns
         best_candidate = None
         best_score = 0
+        all_candidates = []
         
         for col in self.df.columns:
             try:
@@ -49,6 +50,15 @@ class KarenNCBProcessor:
                         # Calculate score based on distribution and total count
                         score = total_transactions + (min(nb_count, c_count, r_count) * 2)
                         
+                        all_candidates.append({
+                            'column': col,
+                            'score': score,
+                            'nb_count': nb_count,
+                            'c_count': c_count,
+                            'r_count': r_count,
+                            'total': total_transactions
+                        })
+                        
                         if score > best_score:
                             best_score = score
                             best_candidate = col
@@ -58,18 +68,70 @@ class KarenNCBProcessor:
             except Exception as e:
                 continue
         
+        # DEBUG: Show all candidates and why the best one was selected
+        if all_candidates:
+            st.write("🔍 **DEBUG: All transaction column candidates:**")
+            all_candidates.sort(key=lambda x: x['score'], reverse=True)
+            
+            for i, candidate in enumerate(all_candidates[:5]):  # Show top 5
+                st.write(f"  {i+1}. {candidate['column']}: Score={candidate['score']}, NB={candidate['nb_count']}, C={candidate['c_count']}, R={candidate['r_count']}")
+            
+            st.write(f"  🎯 **Selected: {best_candidate} with score {best_score}**")
+        
         if best_candidate:
             self.transaction_column = best_candidate
             st.write(f"✅ **Selected Transaction Column:** {best_candidate} (score: {best_score})")
             
+            # DEBUG: Show detailed analysis of the selected column
+            st.write("🔍 **DEBUG: Detailed analysis of selected transaction column...**")
+            
             # Show the actual transaction distribution
             sample_data = self.df[best_candidate].iloc[1:].dropna().head(500)
             str_vals = sample_data.astype(str).str.upper().str.strip()
+            
+            # Count patterns
             nb_count = str_vals.str.contains('NB', na=False).sum()
             c_count = str_vals.str.contains('C', na=False).sum()
             r_count = str_vals.str.contains('R', na=False).sum()
             
             st.write(f"  Final counts: NB={nb_count}, C={c_count}, R={r_count}")
+            
+            # Show sample values to verify this is actually a transaction column
+            unique_vals = str_vals.value_counts().head(10)
+            st.write(f"  📊 **Sample values from selected column:**")
+            for val, count in unique_vals.items():
+                st.write(f"    '{val}': {count} records")
+            
+            # Verify this looks like a transaction column
+            transaction_like = False
+            for val, count in unique_vals.items():
+                val_str = str(val).upper().strip()
+                if val_str in ['NB', 'C', 'R'] or len(val_str) <= 3:
+                    transaction_like = True
+                    break
+            
+            if not transaction_like:
+                st.write("🚨 **WARNING: Selected column doesn't look like a transaction column!**")
+                st.write("🔍 **This might be the wrong column selection.**")
+                
+                # Try to find a better candidate
+                for candidate in all_candidates[1:]:  # Skip the first one
+                    col = candidate['column']
+                    sample_data = self.df[col].iloc[1:].dropna().head(100)
+                    str_vals = sample_data.astype(str).str.upper().str.strip()
+                    
+                    # Check if this looks more like transaction codes
+                    for val, count in str_vals.value_counts().head(5).items():
+                        val_str = str(val).upper().strip()
+                        if val_str in ['NB', 'C', 'R']:
+                            st.write(f"  ✅ **Found better candidate: {col} with transaction code '{val}'**")
+                            best_candidate = col
+                            best_score = candidate['score']
+                            self.transaction_column = col
+                            break
+                    if best_candidate != all_candidates[0]['column']:
+                        break
+            
             return best_candidate
         else:
             st.error("❌ **Could not find Transaction Type column**")
@@ -209,14 +271,63 @@ class KarenNCBProcessor:
         # Get the actual data (skip header)
         data_df = self.df.iloc[1:].copy()
         
-        # Filter by transaction type using the working pattern
-        nb_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('NB', na=False)].copy()
-        c_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('C', na=False)].copy()
-        r_df = data_df[data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('R', na=False)].copy()
+        # DEBUG: Show what's actually in the transaction column
+        st.write("🔍 **DEBUG: What's in the transaction column?**")
+        sample_data = data_df[self.transaction_column].dropna().head(100)
+        str_vals = sample_data.astype(str).str.upper().str.strip()
+        unique_vals = str_vals.value_counts().head(10)
         
+        st.write(f"  📊 **Transaction column '{self.transaction_column}' contains:**")
+        for val, count in unique_vals.items():
+            st.write(f"    '{val}': {count} records")
+        
+        # DEBUG: Check for transaction codes specifically
+        st.write("🔍 **DEBUG: Looking for specific transaction codes...**")
+        nb_count = str_vals.str.contains('NB', na=False).sum()
+        c_count = str_vals.str.contains('C', na=False).sum()
+        r_count = str_vals.str.contains('R', na=False).sum()
+        
+        st.write(f"  - NB pattern found: {nb_count}")
+        st.write(f"  - C pattern found: {c_count}")
+        st.write(f"  - R pattern found: {r_count}")
+        
+        # Filter by transaction type using the working pattern
+        st.write("🔄 **Filtering by transaction type...**")
+        
+        # NB records
+        nb_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('NB', na=False)
+        nb_df = data_df[nb_mask].copy()
         st.write(f"  - NB records found: {len(nb_df)}")
+        
+        # C records  
+        c_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('C', na=False)
+        c_df = data_df[c_mask].copy()
         st.write(f"  - C records found: {len(c_df)}")
+        
+        # R records
+        r_mask = data_df[self.transaction_column].astype(str).str.upper().str.strip().str.contains('R', na=False)
+        r_df = data_df[r_mask].copy()
         st.write(f"  - R records found: {len(r_df)}")
+        
+        # DEBUG: Verify the filtering worked correctly
+        total_filtered = len(nb_df) + len(c_df) + len(r_df)
+        st.write(f"  - Total filtered records: {total_filtered}")
+        st.write(f"  - Original data records: {len(data_df)}")
+        
+        if total_filtered != len(data_df):
+            st.write("⚠️ **WARNING: Some records may not have been classified!**")
+            st.write("🔍 **Checking for unclassified records...**")
+            
+            # Find records that don't match any transaction type
+            all_masks = nb_mask | c_mask | r_mask
+            unclassified = data_df[~all_masks]
+            st.write(f"  - Unclassified records: {len(unclassified)}")
+            
+            if len(unclassified) > 0:
+                st.write("  📊 **Sample unclassified values:**")
+                unclassified_sample = unclassified[self.transaction_column].dropna().head(10)
+                for val in unclassified_sample:
+                    st.write(f"    '{val}'")
         
         # Step 5: Apply Karen 2.0 filtering logic EXACTLY as specified
         st.write("🔄 **Applying Karen 2.0 Filtering Logic EXACTLY...**")
