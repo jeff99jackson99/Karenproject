@@ -14,39 +14,137 @@ st.set_page_config(page_title="Karen NCB 2.0", page_icon="🚀", layout="wide")
 def detect_column_structure_v2(excel_file):
     """Detect column structure from Col Ref sheet for version 2.0."""
     try:
-        # Read the Col Ref sheet to understand column mapping
-        col_ref_df = pd.read_excel(excel_file, sheet_name='Col Ref')
+        # First, let's see what sheets are available
+        excel_data = pd.ExcelFile(excel_file)
+        st.write(f"🔍 **Available sheets:** {excel_data.sheet_names}")
+        
+        # Look for the Col Ref sheet (try different possible names)
+        col_ref_sheet = None
+        possible_names = ['Col Ref', 'ColRef', 'Column Reference', 'ColumnRef', 'Reference', 'Col_Ref']
+        
+        for sheet_name in excel_data.sheet_names:
+            if any(name.lower() in sheet_name.lower() for name in possible_names):
+                col_ref_sheet = sheet_name
+                break
+        
+        if not col_ref_sheet:
+            st.error(f"❌ Could not find Col Ref sheet. Available sheets: {excel_data.sheet_names}")
+            st.write("🔍 **Looking for alternative reference sheets...**")
+            
+            # Try to find any sheet that might contain column information
+            for sheet_name in excel_data.sheet_names:
+                if not any(keyword in sheet_name.lower() for keyword in ['data', 'transaction', 'summary']):
+                    st.write(f"🔍 **Checking sheet:** {sheet_name}")
+                    try:
+                        test_df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                        # Look for Admin or NCB content in this sheet
+                        content_str = ' '.join([str(val) for val in test_df.values.flatten() if pd.notna(val)]).upper()
+                        if any(keyword in content_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                            st.write(f"✅ **Found potential reference sheet:** {sheet_name}")
+                            col_ref_sheet = sheet_name
+                            break
+                    except:
+                        continue
+            
+            if not col_ref_sheet:
+                st.error("❌ No suitable reference sheet found. Please ensure your Excel file has a 'Col Ref' sheet or similar.")
+                return {}, {}, {}
+        
+        st.write(f"✅ **Using reference sheet:** {col_ref_sheet}")
+        
+        # Read the reference sheet
+        col_ref_df = pd.read_excel(excel_file, sheet_name=col_ref_sheet)
+        
+        st.write(f"🔍 **Reference sheet loaded:** {col_ref_df.shape}")
+        st.write(f"🔍 **Reference sheet columns:** {list(col_ref_df.columns)}")
+        st.write(f"🔍 **Reference sheet first few rows:**")
+        st.dataframe(col_ref_df.head(10))
         
         # Look for the row that contains column descriptions
         column_mapping = {}
         label_columns = {}
         amount_columns = {}
         
-        # Find the row with column descriptions
+        # Try different approaches to find the column descriptions
+        found_mapping = False
+        
+        # Approach 1: Look for specific keywords in any row
         for idx, row in col_ref_df.iterrows():
-            if 'Admin' in str(row.iloc[2]) or 'NCB' in str(row.iloc[7]):
-                # This is the row with column descriptions
+            row_str = ' '.join([str(val) for val in row if pd.notna(val)]).upper()
+            if any(keyword in row_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER', 'OFFSET', 'FEE']):
+                st.write(f"🔍 **Found potential mapping row {idx}:** {row_str[:100]}...")
+                
+                # This row contains column descriptions
                 for col_idx, value in enumerate(row):
                     if pd.notna(value) and str(value).strip():
                         desc = str(value).strip()
                         column_mapping[col_idx] = desc
                         
                         # Identify label columns (containing text like "Agent NCB", "Dealer NCB Fee", etc.)
-                        if any(keyword in desc.upper() for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET']):
+                        if any(keyword in desc.upper() for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET', 'ADMIN']):
                             label_columns[col_idx] = desc
                             # The amount column is typically the next column over
                             if col_idx + 1 < len(row):
                                 amount_columns[col_idx + 1] = f"Amount for {desc}"
+                
+                found_mapping = True
+                break
         
-        st.write("🔍 **Column Structure Detected:**")
-        st.write(f"  Total columns mapped: {len(column_mapping)}")
-        st.write(f"  Label columns found: {len(label_columns)}")
-        st.write(f"  Amount columns found: {len(amount_columns)}")
+        # Approach 2: If no mapping found, try to infer from column headers
+        if not found_mapping:
+            st.write("🔄 **Trying alternative approach - checking column headers...**")
+            
+            # Check if the first row contains column descriptions
+            first_row = col_ref_df.iloc[0]
+            for col_idx, value in enumerate(first_row):
+                if pd.notna(value) and str(value).strip():
+                    desc = str(value).strip()
+                    column_mapping[col_idx] = desc
+                    
+                    if any(keyword in desc.upper() for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET', 'ADMIN']):
+                        label_columns[col_idx] = desc
+                        if col_idx + 1 < len(first_row):
+                            amount_columns[col_idx + 1] = f"Amount for {desc}"
+            
+            found_mapping = len(column_mapping) > 0
         
-        return column_mapping, label_columns, amount_columns
+        # Approach 3: Look for any row with Admin or NCB content
+        if not found_mapping:
+            st.write("🔄 **Trying content-based detection...**")
+            
+            for idx, row in col_ref_df.iterrows():
+                for col_idx, value in enumerate(row):
+                    if pd.notna(value) and str(value).strip():
+                        val_str = str(value).strip().upper()
+                        if any(keyword in val_str for keyword in ['ADMIN', 'NCB', 'AGENT', 'DEALER']):
+                            column_mapping[col_idx] = str(value).strip()
+                            
+                            if any(keyword in val_str for keyword in ['AGENT NCB', 'DEALER NCB', 'OFFSET', 'FEE', 'BUCKET']):
+                                label_columns[col_idx] = str(value).strip()
+                                if col_idx + 1 < len(row):
+                                    amount_columns[col_idx + 1] = f"Amount for {str(value).strip()}"
+            
+            found_mapping = len(column_mapping) > 0
+        
+        if found_mapping:
+            st.write("🔍 **Column Structure Detected:**")
+            st.write(f"  Total columns mapped: {len(column_mapping)}")
+            st.write(f"  Label columns found: {len(label_columns)}")
+            st.write(f"  Amount columns found: {len(amount_columns)}")
+            
+            st.write("🔍 **Sample column mappings:**")
+            for i, (col_idx, desc) in enumerate(list(column_mapping.items())[:10]):
+                st.write(f"  Column {col_idx}: {desc}")
+            
+            return column_mapping, label_columns, amount_columns
+        else:
+            st.warning("⚠️ No column mapping found in reference sheet")
+            return {}, {}, {}
         
     except Exception as e:
-        st.warning(f"⚠️ Could not read 'Col Ref' sheet: {e}")
+        st.error(f"❌ Error reading reference sheet: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return {}, {}, {}
 
 def find_transaction_column(df):
