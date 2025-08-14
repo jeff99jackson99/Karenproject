@@ -175,7 +175,7 @@ def find_transaction_column(df):
     return transaction_col
 
 def process_data_v2(df, column_mapping, admin_columns, amount_columns):
-    """Process data according to version 2.0 requirements - using working logic from first version with new column mapping."""
+    """Process data according to version 2.0 requirements - using label matching and exact filtering logic."""
     
     # Find transaction column
     transaction_col = find_transaction_column(df)
@@ -195,133 +195,108 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
     st.write(f"  Cancellations: {c_mask.sum()}")
     st.write(f"  Reinstatements: {r_mask.sum()}")
     
-    # Process New Business data with the WORKING filtering logic from first version
-    nb_df = df[nb_mask].copy()
+    # Find NCB-related columns using label matching (not fixed positions)
+    ncbi_labels = [
+        'Agent NCB', 'Agent NCB Fee', 'Dealer NCB', 'Dealer NCB Fee',
+        'Agent NCB Offset', 'Agent NCB Offset Bucket', 'Dealer NCB Offset', 'Dealer NCB Offset Bucket'
+    ]
     
-    # Apply the EXACT filtering logic that was working before (giving ~1200 records)
-    if len(admin_columns) >= 4:
-        # Get the admin column names using the working logic from first version
-        admin_cols = [
-            admin_columns.get('Admin 3'),
-            admin_columns.get('Admin 4'), 
-            admin_columns.get('Admin 9'),
-            admin_columns.get('Admin 10')
-        ]
+    # Find label columns and their corresponding amount columns
+    label_amount_pairs = []
+    for i, col in enumerate(df.columns):
+        col_str = str(col).strip()
+        for label in ncbi_labels:
+            if label.lower() in col_str.lower():
+                # Found a label column, get the next column for the amount
+                if i + 1 < len(df.columns):
+                    amount_col = df.columns[i + 1]
+                    label_amount_pairs.append({
+                        'label_col': col,
+                        'amount_col': amount_col,
+                        'label_name': label
+                    })
+                    st.write(f"✅ **Found NCB pair:** {col} → {amount_col} ({label})")
+                break
+    
+    if len(label_amount_pairs) < 4:
+        st.error(f"❌ Need at least 4 NCB label-amount pairs, found {len(label_amount_pairs)}")
+        return None
+    
+    # Get the amount columns for filtering
+    amount_cols = [pair['amount_col'] for pair in label_amount_pairs]
+    st.write(f"✅ **Using amount columns for filtering:** {amount_cols}")
+    
+    # Process New Business data (NB) - sum > 0
+    nb_df = df[nb_mask].copy()
+    if len(nb_df) > 0:
+        # Convert amount columns to numeric
+        for col in amount_cols:
+            nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
         
-        # Remove None values
-        admin_cols = [col for col in admin_cols if col is not None]
+        # Calculate sum of all NCB amounts
+        nb_df['NCB_Sum'] = nb_df[amount_cols].sum(axis=1)
         
-        if len(admin_cols) < 4:
-            st.error(f"❌ Need exactly 4 Admin columns, found {len(admin_cols)}")
-            return None
-        
-        st.write(f"✅ **Processing with Admin columns:** {admin_cols}")
-        
-        # Convert admin columns to numeric (working logic from first version)
-        for col in admin_cols:
-            if col in df.columns:
-                nb_df[col] = pd.to_numeric(nb_df[col], errors='coerce').fillna(0)
-            else:
-                st.error(f"❌ Column {col} not found in data")
-                return None
-        
-        # Calculate sum of admin amounts (working logic from first version)
-        nb_df['Admin_Sum'] = nb_df[admin_cols].sum(axis=1)
-        
-        # Apply the EXACT user requirement: ALL 4 Admin amounts > 0 AND sum > 0
-        # This is the logic that was working and giving ~1200 records
-        nb_filtered = nb_df[
-            (nb_df['Admin_Sum'] > 0) &
-            (nb_df[admin_cols[0]] > 0) &
-            (nb_df[admin_cols[1]] > 0) &
-            (nb_df[admin_cols[2]] > 0) &
-            (nb_df[admin_cols[3]] > 0)
-        ]
-        
-        st.write(f"✅ **New Business filtered:** {len(nb_filtered)} records (using working logic from first version)")
+        # Filter: sum > 0 (as per instructions)
+        nb_filtered = nb_df[nb_df['NCB_Sum'] > 0]
+        st.write(f"✅ **New Business filtered (sum > 0):** {len(nb_filtered)} records")
         st.write(f"  Expected: ~1200 records")
         st.write(f"  Actual: {len(nb_filtered)} records")
-        
     else:
-        nb_filtered = nb_df
-        st.write(f"⚠️ **Using unfiltered New Business data:** {len(nb_filtered)} records")
-        st.write(f"  Reason: Only found {len(admin_columns)} Admin columns, need 4")
+        nb_filtered = pd.DataFrame()
     
-    # Process Cancellation data (negative/empty/0 values expected)
-    c_df = df[c_mask].copy()
-    
-    # Apply filtering for cancellations (sum != 0) - this was working
-    if len(admin_columns) >= 4:
-        admin_cols = [
-            admin_columns.get('Admin 3'),
-            admin_columns.get('Admin 4'), 
-            admin_columns.get('Admin 9'),
-            admin_columns.get('Admin 10')
-        ]
-        admin_cols = [col for col in admin_cols if col is not None]
-        
-        if len(admin_cols) >= 4:
-            for col in admin_cols:
-                c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
-            c_df['Admin_Sum'] = c_df[admin_cols].sum(axis=1)
-            c_filtered = c_df[c_df['Admin_Sum'] != 0]
-            st.write(f"✅ **Cancellations filtered:** {len(c_filtered)} records")
-        else:
-            c_filtered = c_df
-            st.write(f"⚠️ **Using unfiltered Cancellation data:** {len(c_filtered)} records")
-    else:
-        c_filtered = c_df
-        st.write(f"⚠️ **Using unfiltered Cancellation data:** {len(c_filtered)} records")
-    
-    # Process Reinstatement data (positive/empty/0 values expected)
+    # Process Reinstatement data (R) - sum > 0
     r_df = df[r_mask].copy()
-    
-    # Apply filtering for reinstatements (sum != 0) - this was working
-    if len(admin_columns) >= 4:
-        admin_cols = [
-            admin_columns.get('Admin 3'),
-            admin_columns.get('Admin 4'), 
-            admin_columns.get('Admin 9'),
-            admin_columns.get('Admin 10')
-        ]
-        admin_cols = [col for col in admin_cols if col is not None]
+    if len(r_df) > 0:
+        # Convert amount columns to numeric
+        for col in amount_cols:
+            r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
         
-        if len(admin_cols) >= 4:
-            for col in admin_cols:
-                r_df[col] = pd.to_numeric(r_df[col], errors='coerce').fillna(0)
-            r_df['Admin_Sum'] = r_df[admin_cols].sum(axis=1)
-            r_filtered = r_df[r_df['Admin_Sum'] != 0]
-            st.write(f"✅ **Reinstatements filtered:** {len(r_filtered)} records")
-        else:
-            r_filtered = r_df
-            st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
+        # Calculate sum of all NCB amounts
+        r_df['NCB_Sum'] = r_df[amount_cols].sum(axis=1)
+        
+        # Filter: sum > 0 (as per instructions)
+        r_filtered = r_df[r_df['NCB_Sum'] > 0]
+        st.write(f"✅ **Reinstatements filtered (sum > 0):** {len(r_filtered)} records")
     else:
-        r_filtered = r_df
-        st.write(f"⚠️ **Using unfiltered Reinstatement data:** {len(r_filtered)} records")
+        r_filtered = pd.DataFrame()
     
-    # Create output dataframes with the NEW specific column mapping from instructions
-    # Data Set 1 - New Business (NB)
+    # Process Cancellation data (C) - sum < 0
+    c_df = df[c_mask].copy()
+    if len(c_df) > 0:
+        # Convert amount columns to numeric
+        for col in amount_cols:
+            c_df[col] = pd.to_numeric(c_df[col], errors='coerce').fillna(0)
+        
+        # Calculate sum of all NCB amounts
+        c_df['NCB_Sum'] = c_df[amount_cols].sum(axis=1)
+        
+        # Filter: sum < 0 (as per instructions)
+        c_filtered = c_df[c_df['NCB_Sum'] < 0]
+        st.write(f"✅ **Cancellations filtered (sum < 0):** {len(c_filtered)} records")
+    else:
+        c_filtered = pd.DataFrame()
+    
+    # Create output dataframes with EXACT column order as specified in instructions
+    
+    # Data Set 1 - New Contracts (NB)
     nb_output = pd.DataFrame()
     if len(nb_filtered) > 0:
-        nb_output['Insurer_Code'] = nb_filtered.iloc[:, 1]  # Column B
-        nb_output['Product_Type_Code'] = nb_filtered.iloc[:, 2]  # Column C
-        nb_output['Coverage_Code'] = nb_filtered.iloc[:, 3]  # Column D
-        nb_output['Dealer_Number'] = nb_filtered.iloc[:, 4]  # Column E
-        nb_output['Dealer_Name'] = nb_filtered.iloc[:, 5]  # Column F
-        nb_output['Contract_Number'] = nb_filtered.iloc[:, 7]  # Column H
-        nb_output['Contract_Sale_Date'] = nb_filtered.iloc[:, 11]  # Column L
-        nb_output['Transaction_Date'] = nb_filtered.iloc[:, 9]  # Column J
-        nb_output['Transaction_Type'] = nb_filtered.iloc[:, 12]  # Column M
-        nb_output['Customer_Last_Name'] = nb_filtered.iloc[:, 20]  # Column U
+        # Find columns by searching for content (not fixed positions)
+        nb_output['Insurer_Code'] = find_column_by_content(nb_filtered, ['INSURER', 'INSURER CODE'])
+        nb_output['Product_Type_Code'] = find_column_by_content(nb_filtered, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+        nb_output['Coverage_Code'] = find_column_by_content(nb_filtered, ['COVERAGE CODE', 'COVERAGE'])
+        nb_output['Dealer_Number'] = find_column_by_content(nb_filtered, ['DEALER NUMBER', 'DEALER #'])
+        nb_output['Dealer_Name'] = find_column_by_content(nb_filtered, ['DEALER NAME', 'DEALER'])
+        nb_output['Contract_Number'] = find_column_by_content(nb_filtered, ['CONTRACT NUMBER', 'CONTRACT #'])
+        nb_output['Contract_Sale_Date'] = find_column_by_content(nb_filtered, ['CONTRACT SALE DATE', 'SALE DATE'])
+        nb_output['Transaction_Date'] = find_column_by_content(nb_filtered, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+        nb_output['Transaction_Type'] = find_column_by_content(nb_filtered, ['TRANSACTION TYPE'])
+        nb_output['Customer_Last_Name'] = find_column_by_content(nb_filtered, ['LAST NAME', 'CUSTOMER LAST NAME'])
         
-        # Admin Amount columns
-        nb_output['Admin_3_Amount_Agent_NCB_Fee'] = nb_filtered.iloc[:, 40]  # Column AO
-        nb_output['Admin_4_Amount_Dealer_NCB_Fee'] = nb_filtered.iloc[:, 41]  # Column AQ
-        nb_output['Admin_6_Amount_Agent_NCB_Offset'] = nb_filtered.iloc[:, 46]  # Column AU
-        nb_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 47]  # Column AW
-        nb_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 48]  # Column AY
-        nb_output['Admin_9_Amount_Agent_NCB_Offset'] = nb_filtered.iloc[:, 52]  # Column BA
-        nb_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = nb_filtered.iloc[:, 53]  # Column BC
+        # Add NCB amount columns in order
+        for i, pair in enumerate(label_amount_pairs):
+            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
+            nb_output[col_name] = nb_filtered[pair['amount_col']]
         
         nb_output['Transaction_Type'] = 'NB'
         nb_output['Row_Type'] = 'New Business'
@@ -329,25 +304,22 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
     # Data Set 2 - Reinstatements (R)
     r_output = pd.DataFrame()
     if len(r_filtered) > 0:
-        r_output['Insurer_Code'] = r_filtered.iloc[:, 1]  # Column B
-        r_output['Product_Type_Code'] = r_filtered.iloc[:, 2]  # Column C
-        r_output['Coverage_Code'] = r_filtered.iloc[:, 3]  # Column D
-        r_output['Dealer_Number'] = r_filtered.iloc[:, 4]  # Column E
-        r_output['Dealer_Name'] = r_filtered.iloc[:, 5]  # Column F
-        r_output['Contract_Number'] = r_filtered.iloc[:, 7]  # Column H
-        r_output['Contract_Sale_Date'] = r_filtered.iloc[:, 11]  # Column L
-        r_output['Transaction_Date'] = r_filtered.iloc[:, 9]  # Column J
-        r_output['Transaction_Type'] = r_filtered.iloc[:, 12]  # Column M
-        r_output['Customer_Last_Name'] = r_filtered.iloc[:, 20]  # Column U
+        # Same columns as NB
+        r_output['Insurer_Code'] = find_column_by_content(r_filtered, ['INSURER', 'INSURER CODE'])
+        r_output['Product_Type_Code'] = find_column_by_content(r_filtered, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+        r_output['Coverage_Code'] = find_column_by_content(r_filtered, ['COVERAGE CODE', 'COVERAGE'])
+        r_output['Dealer_Number'] = find_column_by_content(r_filtered, ['DEALER NUMBER', 'DEALER #'])
+        r_output['Dealer_Name'] = find_column_by_content(r_filtered, ['DEALER NAME', 'DEALER'])
+        r_output['Contract_Number'] = find_column_by_content(r_filtered, ['CONTRACT NUMBER', 'CONTRACT #'])
+        r_output['Contract_Sale_Date'] = find_column_by_content(r_filtered, ['CONTRACT SALE DATE', 'SALE DATE'])
+        r_output['Transaction_Date'] = find_column_by_content(r_filtered, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+        r_output['Transaction_Type'] = find_column_by_content(r_filtered, ['TRANSACTION TYPE'])
+        r_output['Customer_Last_Name'] = find_column_by_content(r_filtered, ['LAST NAME', 'CUSTOMER LAST NAME'])
         
-        # Admin Amount columns
-        r_output['Admin_3_Amount_Agent_NCB_Fee'] = r_filtered.iloc[:, 40]  # Column AO
-        r_output['Admin_4_Amount_Dealer_NCB_Fee'] = r_filtered.iloc[:, 41]  # Column AQ
-        r_output['Admin_6_Amount_Agent_NCB_Offset'] = r_filtered.iloc[:, 46]  # Column AU
-        r_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = r_filtered.iloc[:, 47]  # Column AW
-        r_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = r_filtered.iloc[:, 48]  # Column AY
-        r_output['Admin_9_Amount_Agent_NCB_Offset'] = r_filtered.iloc[:, 52]  # Column BA
-        r_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = r_filtered.iloc[:, 53]  # Column BC
+        # Add NCB amount columns in order
+        for i, pair in enumerate(label_amount_pairs):
+            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
+            r_output[col_name] = r_filtered[pair['amount_col']]
         
         r_output['Transaction_Type'] = 'R'
         r_output['Row_Type'] = 'Reinstatement'
@@ -355,31 +327,28 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
     # Data Set 3 - Cancellations (C)
     c_output = pd.DataFrame()
     if len(c_filtered) > 0:
-        c_output['Insurer_Code'] = c_filtered.iloc[:, 1]  # Column B
-        c_output['Product_Type_Code'] = c_filtered.iloc[:, 2]  # Column C
-        c_output['Coverage_Code'] = c_filtered.iloc[:, 3]  # Column D
-        c_output['Dealer_Number'] = c_filtered.iloc[:, 4]  # Column E
-        c_output['Dealer_Name'] = c_filtered.iloc[:, 5]  # Column F
-        c_output['Contract_Number'] = c_filtered.iloc[:, 7]  # Column H
-        c_output['Contract_Sale_Date'] = c_filtered.iloc[:, 11]  # Column L
-        c_output['Transaction_Date'] = c_filtered.iloc[:, 9]  # Column J
-        c_output['Transaction_Type'] = c_filtered.iloc[:, 12]  # Column M
-        c_output['Customer_Last_Name'] = c_filtered.iloc[:, 20]  # Column U
+        # Same base columns as NB
+        c_output['Insurer_Code'] = find_column_by_content(c_filtered, ['INSURER', 'INSURER CODE'])
+        c_output['Product_Type_Code'] = find_column_by_content(c_filtered, ['PRODUCT TYPE', 'PRODUCT TYPE CODE'])
+        c_output['Coverage_Code'] = find_column_by_content(c_filtered, ['COVERAGE CODE', 'COVERAGE'])
+        c_output['Dealer_Number'] = find_column_by_content(c_filtered, ['DEALER NUMBER', 'DEALER #'])
+        c_output['Dealer_Name'] = find_column_by_content(c_filtered, ['DEALER NAME', 'DEALER'])
+        c_output['Contract_Number'] = find_column_by_content(c_filtered, ['CONTRACT NUMBER', 'CONTRACT #'])
+        c_output['Contract_Sale_Date'] = find_column_by_content(c_filtered, ['CONTRACT SALE DATE', 'SALE DATE'])
+        c_output['Transaction_Date'] = find_column_by_content(c_filtered, ['TRANSACTION DATE', 'ACTIVATION DATE'])
+        c_output['Transaction_Type'] = find_column_by_content(c_filtered, ['TRANSACTION TYPE'])
+        c_output['Customer_Last_Name'] = find_column_by_content(c_filtered, ['LAST NAME', 'CUSTOMER LAST NAME'])
         
         # Additional columns for cancellations
-        c_output['Contract_Term'] = c_filtered.iloc[:, 25]  # Column Z
-        c_output['Cancellation_Date'] = c_filtered.iloc[:, 30]  # Column AE
-        c_output['Cancellation_Reason'] = c_filtered.iloc[:, 27]  # Column AB
-        c_output['Cancellation_Factor'] = c_filtered.iloc[:, 26]  # Column AA
+        c_output['Contract_Term'] = find_column_by_content(c_filtered, ['CONTRACT TERM', 'TERM'])
+        c_output['Cancellation_Date'] = find_column_by_content(c_filtered, ['CANCELLATION DATE', 'CANCEL DATE'])
+        c_output['Cancellation_Reason'] = find_column_by_content(c_filtered, ['CANCELLATION REASON', 'REASON'])
+        c_output['Cancellation_Factor'] = find_column_by_content(c_filtered, ['CANCELLATION FACTOR', 'FACTOR'])
         
-        # Admin Amount columns
-        c_output['Admin_3_Amount_Agent_NCB_Fee'] = c_filtered.iloc[:, 40]  # Column AO
-        c_output['Admin_4_Amount_Dealer_NCB_Fee'] = c_filtered.iloc[:, 41]  # Column AQ
-        c_output['Admin_6_Amount_Agent_NCB_Offset'] = c_filtered.iloc[:, 46]  # Column AU
-        c_output['Admin_7_Amount_Agent_NCB_Offset_Bucket'] = c_filtered.iloc[:, 47]  # Column AW
-        c_output['Admin_8_Amount_Dealer_NCB_Offset_Bucket'] = c_filtered.iloc[:, 48]  # Column AY
-        c_output['Admin_9_Amount_Agent_NCB_Offset'] = c_filtered.iloc[:, 52]  # Column BA
-        c_output['Admin_10_Amount_Dealer_NCB_Offset_Bucket'] = c_filtered.iloc[:, 53]  # Column BC
+        # Add NCB amount columns in order
+        for i, pair in enumerate(label_amount_pairs):
+            col_name = f"NCB_Amount_{i+1}_{pair['label_name'].replace(' ', '_')}"
+            c_output[col_name] = c_filtered[pair['amount_col']]
         
         c_output['Transaction_Type'] = 'C'
         c_output['Row_Type'] = 'Cancellation'
@@ -399,6 +368,27 @@ def process_data_v2(df, column_mapping, admin_columns, amount_columns):
         'combined_data': combined_output,
         'total_records': len(combined_output)
     }
+
+def find_column_by_content(df, search_terms):
+    """Find a column by searching for specific content in column names or first few rows."""
+    for col in df.columns:
+        col_str = str(col).upper()
+        # Check column name
+        for term in search_terms:
+            if term.upper() in col_str:
+                return df[col]
+        
+        # Check first few rows for content
+        try:
+            first_values = df[col].astype(str).str.upper().head(10)
+            for term in search_terms:
+                if any(term.upper() in val for val in first_values):
+                    return df[col]
+        except:
+            continue
+    
+    # If not found, return empty series
+    return pd.Series([None] * len(df))
 
 def main():
     st.title("🚀 Karen NCB Data Processor - Iteration 2.0")
@@ -463,86 +453,112 @@ def main():
                     st.write(f"📏 **Data shape:** {df.shape}")
                     
                     # Process data
-                    output_data = process_data_v2(df, column_mapping, admin_columns, amount_columns)
+                    result = process_data_v2(df, column_mapping, admin_columns, amount_columns)
                     
-                    if output_data:
-                        st.success(f"✅ **Processing Complete!** Generated {output_data['total_records']} records")
+                    if result:
+                        st.success(f"✅ **Processing Complete!** Generated {result['total_records']} records")
                         
                         # Display results
                         st.subheader("📊 Processing Results")
-                        st.write(f"**Total Records:** {output_data['total_records']}")
+                        st.write(f"**Total Records:** {result['total_records']}")
                         
                         # Show breakdown by transaction type
-                        type_counts = output_data['combined_data']['Transaction_Type'].value_counts()
+                        type_counts = result['combined_data']['Transaction_Type'].value_counts()
                         st.write("**Breakdown by Transaction Type:**")
                         for trans_type, count in type_counts.items():
                             st.write(f"  {trans_type}: {count} records")
                         
                         # Show sample data in collapsible section
                         with st.expander("🔍 **Sample Output Data** (Click to expand)", expanded=False):
-                            st.dataframe(output_data['combined_data'].head(10))
+                            st.dataframe(result['combined_data'].head(10))
                         
-                        # Download buttons for each section
-                        st.subheader("💾 Download Results")
+                        # Generate Excel file with separate worksheets
+                        if st.button("📥 Download Excel File (All Data Sets)"):
+                            try:
+                                # Create Excel file with separate worksheets
+                                output = io.BytesIO()
+                                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                                    # Data Set 1 - New Contracts (NB)
+                                    if len(result['nb_data']) > 0:
+                                        result['nb_data'].to_excel(writer, sheet_name='New_Contracts_NB', index=False)
+                                        st.write(f"✅ **New Contracts worksheet created:** {len(result['nb_data'])} records")
+                                    
+                                    # Data Set 2 - Reinstatements (R)
+                                    if len(result['reinstatement_data']) > 0:
+                                        result['reinstatement_data'].to_excel(writer, sheet_name='Reinstatements_R', index=False)
+                                        st.write(f"✅ **Reinstatements worksheet created:** {len(result['reinstatement_data'])} records")
+                                    
+                                    # Data Set 3 - Cancellations (C)
+                                    if len(result['cancellation_data']) > 0:
+                                        result['cancellation_data'].to_excel(writer, sheet_name='Cancellations_C', index=False)
+                                        st.write(f"✅ **Cancellations worksheet created:** {len(result['cancellation_data'])} records")
+                                
+                                output.seek(0)
+                                
+                                # Create download button
+                                st.download_button(
+                                    label="📥 Download Excel File (3 Worksheets)",
+                                    data=output.getvalue(),
+                                    file_name=f"NCB_Transaction_Summary_v2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
+                                
+                                st.success(f"✅ **Excel file generated successfully!**")
+                                st.write(f"📊 **File contains:**")
+                                st.write(f"  • New Contracts (NB): {len(result['nb_data'])} records")
+                                st.write(f"  • Reinstatements (R): {len(result['reinstatement_data'])} records")
+                                st.write(f"  • Cancellations (C): {len(result['cancellation_data'])} records")
+                                st.write(f"  • **Total:** {result['total_records']} records across 3 worksheets")
+                                
+                            except Exception as e:
+                                st.error(f"❌ Error generating Excel file: {str(e)}")
+                                st.write(f"Debug info: {type(e).__name__}")
                         
-                        # Create Excel files in memory for each section
-                        nb_buffer = io.BytesIO()
-                        c_buffer = io.BytesIO()
-                        r_buffer = io.BytesIO()
+                        # Individual download buttons for each data set
+                        st.write("---")
+                        st.write("### 📥 Individual Data Set Downloads")
                         
-                        with pd.ExcelWriter(nb_buffer, engine='xlsxwriter') as writer:
-                            output_data['nb_data'].to_excel(writer, sheet_name='New_Business', index=False)
-                        with pd.ExcelWriter(c_buffer, engine='xlsxwriter') as writer:
-                            output_data['cancellation_data'].to_excel(writer, sheet_name='Cancellation', index=False)
-                        with pd.ExcelWriter(r_buffer, engine='xlsxwriter') as writer:
-                            output_data['reinstatement_data'].to_excel(writer, sheet_name='Reinstatement', index=False)
+                        # New Business download
+                        if len(result['nb_data']) > 0:
+                            if st.button(f"📥 Download New Business Data ({len(result['nb_data'])} records)"):
+                                nb_output = io.BytesIO()
+                                result['nb_data'].to_excel(nb_output, index=False)
+                                nb_output.seek(0)
+                                
+                                st.download_button(
+                                    label=f"📥 Download NB Data ({len(result['nb_data'])} records)",
+                                    data=nb_output.getvalue(),
+                                    file_name=f"NCB_New_Business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
                         
-                        # Generate filenames with timestamp
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        nb_filename = f"Karen_NCB_2_0_New_Business_{timestamp}.xlsx"
-                        c_filename = f"Karen_NCB_2_0_Cancellation_{timestamp}.xlsx"
-                        r_filename = f"Karen_NCB_2_0_Reinstatement_{timestamp}.xlsx"
-                        combined_filename = f"Karen_NCB_2_0_Combined_{timestamp}.xlsx"
+                        # Cancellation download
+                        if len(result['cancellation_data']) > 0:
+                            if st.button(f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)"):
+                                c_output = io.BytesIO()
+                                result['cancellation_data'].to_excel(c_output, index=False)
+                                c_output.seek(0)
+                                
+                                st.download_button(
+                                    label=f"📥 Download Cancellation Data ({len(result['cancellation_data'])} records)",
+                                    data=c_output.getvalue(),
+                                    file_name=f"NCB_Cancellations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
                         
-                        # Download buttons for each section
-                        st.download_button(
-                            label="📥 Download New Business Excel File",
-                            data=nb_buffer.getvalue(),
-                            file_name=nb_filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        st.download_button(
-                            label="📥 Download Cancellation Excel File",
-                            data=c_buffer.getvalue(),
-                            file_name=c_filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        st.download_button(
-                            label="📥 Download Reinstatement Excel File",
-                            data=r_buffer.getvalue(),
-                            file_name=r_filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        
-                        # Create combined download
-                        combined_buffer = io.BytesIO()
-                        with pd.ExcelWriter(combined_buffer, engine='xlsxwriter') as writer:
-                            output_data['combined_data'].to_excel(writer, sheet_name='Combined_Data', index=False)
-                        
-                        combined_buffer.seek(0)
-                        
-                        st.download_button(
-                            label="📥 Download Combined Excel File",
-                            data=combined_buffer.getvalue(),
-                            file_name=combined_filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                        
-                        st.write(f"📁 **Files saved as:**")
-                        st.write(f"  New Business: {nb_filename}")
-                        st.write(f"  Cancellation: {c_filename}")
-                        st.write(f"  Reinstatement: {r_filename}")
-                        st.write(f"  Combined: {combined_filename}")
+                        # Reinstatement download
+                        if len(result['reinstatement_data']) > 0:
+                            if st.button(f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)"):
+                                r_output = io.BytesIO()
+                                result['reinstatement_data'].to_excel(r_output, index=False)
+                                r_output.seek(0)
+                                
+                                st.download_button(
+                                    label=f"📥 Download Reinstatement Data ({len(result['reinstatement_data'])} records)",
+                                    data=r_output.getvalue(),
+                                    file_name=f"NCB_Reinstatements_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                )
                         
                     else:
                         st.error("❌ No data was processed successfully")
