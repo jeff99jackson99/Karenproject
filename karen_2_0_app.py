@@ -84,35 +84,35 @@ def find_ncb_columns_simple(df):
     """Find NCB columns by looking for Admin columns based on actual file structure."""
     ncb_columns = {}
     
-    # Based on the actual file structure, map Admin columns to NCB types
+    # Look for Admin columns by their actual names (not positions)
     # The actual file has ADMIN 1-10 Amount, we need to map specific ones to Karen 2.0 requirements
     admin_mapping = {
-        40: 'AO',  # ADMIN 3 Amount (Agent NCB Fee) - Column 40
-        42: 'AQ',  # ADMIN 4 Amount (Dealer NCB Fee) - Column 42
-        46: 'AU',  # ADMIN 6 Amount (Agent NCB Offset) - Column 46
-        48: 'AW',  # ADMIN 7 Amount (Agent NCB Offset Bucket) - Column 48
-        50: 'AY',  # ADMIN 8 Amount (Dealer NCB Offset Bucket) - Column 50
-        52: 'BA',  # ADMIN 9 Amount (Agent NCB Offset) - Column 52
-        54: 'BC',  # ADMIN 10 Amount (Dealer NCB Offset Bucket) - Column 54
+        'ADMIN 3 Amount': 'AO',  # Agent NCB Fee
+        'ADMIN 4 Amount': 'AQ',  # Dealer NCB Fee
+        'ADMIN 6 Amount': 'AU',  # Agent NCB Offset
+        'ADMIN 7 Amount': 'AW',  # Agent NCB Offset Bucket
+        'ADMIN 8 Amount': 'AY',  # Dealer NCB Offset Bucket
+        'ADMIN 9 Amount': 'BA',  # Agent NCB Offset
+        'ADMIN 10 Amount': 'BC', # Dealer NCB Offset Bucket
     }
     
-    # Map Admin columns by their actual positions
-    for pos, ncb_type in admin_mapping.items():
-        if pos < len(df.columns):
-            col = df.columns[pos]
+    # Map Admin columns by their actual names
+    for col in df.columns:
+        if col in admin_mapping:
+            ncb_type = admin_mapping[col]
             ncb_columns[ncb_type] = col
-            st.write(f"✅ **Found NCB column:** {ncb_type} → {col} (Position {pos})")
+            st.write(f"✅ **Found NCB column:** {ncb_type} → {col}")
     
     # If we still don't have enough, try to find additional Admin columns
     if len(ncb_columns) < 7:
         st.warning(f"⚠️ **Only found {len(ncb_columns)} NCB columns, need 7. Looking for additional Admin columns...**")
         
         # Look for additional Admin columns that might contain NCB amounts
-        for i, col in enumerate(df.columns):
+        for col in df.columns:
             try:
-                if 'ADMIN' in str(col) and 'Amount' in str(col):
+                if 'ADMIN' in str(col) and 'Amount' in str(col) and col not in ncb_columns.values():
                     # Check if this column has meaningful values
-                    values = df.iloc[:, i].dropna()  # Skip header row
+                    values = df[col].dropna()
                     if len(values) > 0:
                         numeric_vals = pd.to_numeric(values, errors='coerce')
                         non_zero = (numeric_vals != 0).sum()
@@ -120,7 +120,7 @@ def find_ncb_columns_simple(df):
                             # Find a unique name for this Admin column
                             admin_num = f"Admin_{len(ncb_columns) + 1}"
                             ncb_columns[admin_num] = col
-                            st.write(f"✅ **Found additional Admin column:** {admin_num} → {col} (Position {i})")
+                            st.write(f"✅ **Found additional Admin column:** {admin_num} → {col}")
                             
                             if len(ncb_columns) >= 7:
                                 break
@@ -228,20 +228,32 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
             return None
         
         st.write(f"✅ **Transaction column found:** {transaction_col}")
+        st.write(f"🔍 **Transaction column type:** {type(df[transaction_col])}")
+        st.write(f"🔍 **Transaction column shape:** {df[transaction_col].shape if hasattr(df[transaction_col], 'shape') else 'No shape'}")
+        
+        # Ensure we're working with a Series, not a DataFrame
+        if isinstance(df[transaction_col], pd.DataFrame):
+            # If it's a DataFrame, select the first column
+            transaction_series = df[transaction_col].iloc[:, 0]
+            st.write(f"🔍 **Converted DataFrame to Series:** {type(transaction_series)}")
+        else:
+            # If it's already a Series, use it directly
+            transaction_series = df[transaction_col]
+            st.write(f"🔍 **Using Series directly:** {type(transaction_series)}")
         
         # Show unique values in transaction column
-        unique_transactions = df[transaction_col].astype(str).unique()
+        unique_transactions = transaction_series.astype(str).unique()
         st.write(f"🔍 **Unique transaction values found:** {unique_transactions[:20]}")
         
         # More flexible transaction type filtering - look for variations
         # Filter by transaction type and NCB amounts according to Karen 2.0 rules
-        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW', 'N'])
-        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL', 'CANCELLED', 'CANC'])
-        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE', 'REINSTATED'])
+        nb_mask = transaction_series.astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW', 'N'])
+        c_mask = transaction_series.astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL', 'CANCELLED', 'CANC'])
+        r_mask = transaction_series.astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE', 'REINSTATED'])
         
         # Also check for any other transaction types that might exist
         other_mask = ~(nb_mask | c_mask | r_mask)
-        other_transactions = df[transaction_col].astype(str)[other_mask].unique()
+        other_transactions = transaction_series.astype(str)[other_mask].unique()
         if len(other_transactions) > 0:
             st.write(f"🔍 **Other transaction types found:** {other_transactions[:10]}")
         
@@ -253,13 +265,13 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols):
         
         # Show sample values from each transaction type
         if nb_mask.sum() > 0:
-            sample_nb = df[transaction_col][nb_mask].astype(str).unique()[:5]
+            sample_nb = transaction_series[nb_mask].astype(str).unique()[:5]
             st.write(f"🔍 **Sample NB transactions:** {sample_nb}")
         if c_mask.sum() > 0:
-            sample_c = df[transaction_col][c_mask].astype(str).unique()[:5]
+            sample_c = transaction_series[c_mask].astype(str).unique()[:5]
             st.write(f"🔍 **Sample C transactions:** {sample_c}")
         if r_mask.sum() > 0:
-            sample_r = df[transaction_col][r_mask].astype(str).unique()[:5]
+            sample_r = transaction_series[r_mask].astype(str).unique()[:5]
             st.write(f"🔍 **Sample R transactions:** {sample_r}")
         
         # Apply Karen 2.0 filtering rules
