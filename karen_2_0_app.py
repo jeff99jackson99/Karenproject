@@ -338,12 +338,8 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
             st.error("❌ **Transaction Type column not found!**")
             return
         
-        # 🔍 HIDDEN DEBUGGER: Automatically find working approach
-        st.write("🔍 **Running hidden debugger to find optimal filtering approach...**")
-        debug_results = hidden_debugger(df, ncb_columns, required_cols, transaction_col)
-        
-        # FORCE CORRECT KAREN 2.0 APPROACH - BYPASS DEBUGGER
-        st.write("🎯 **FORCING CORRECT KAREN 2.0 FILTERING RULES (BYPASSING DEBUGGER)**")
+        # 🔍 FORCE CORRECT KAREN 2.0 APPROACH - NO DEBUGGER
+        st.write("🎯 **FORCING CORRECT KAREN 2.0 FILTERING RULES (NO DEBUGGER)**")
         st.write("  - New Business (NB): Admin_Sum > 0 (strictly positive)")
         st.write("  - Reinstatements (R): Admin_Sum > 0 (strictly positive)")
         st.write("  - Cancellations (C): Admin_Sum < 0 (strictly negative)")
