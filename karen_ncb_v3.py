@@ -424,6 +424,116 @@ def create_excel_download_clean(df, sheet_name):
         st.error(f"❌ **Error creating Excel download:** {str(e)}")
         return None
 
+def analyze_col_ref_sheet(df_dict):
+    """Analyze the 'Col Ref' sheet to understand column structure."""
+    st.write("🔍 **Analyzing 'Col Ref' sheet for proper column mapping...**")
+    
+    # Look for the Col Ref sheet
+    col_ref_sheet = None
+    for sheet_name in ['Col Ref', 'col ref', 'COL REF', 'ColRef', 'colref']:
+        if sheet_name in df_dict:
+            col_ref_sheet = sheet_name
+            break
+    
+    if not col_ref_sheet:
+        st.error("❌ **No 'Col Ref' sheet found!**")
+        st.write("Available sheets:", list(df_dict.keys()))
+        return None
+    
+    st.write(f"✅ **Found Col Ref sheet:** {col_ref_sheet}")
+    
+    # Load the Col Ref sheet
+    col_ref_df = df_dict[col_ref_sheet]
+    st.write(f"📊 **Col Ref sheet loaded:** {col_ref_df.shape[0]} rows × {col_ref_df.shape[1]} columns")
+    
+    # Show the structure of the Col Ref sheet
+    st.write("🔍 **Col Ref sheet structure:**")
+    st.write("**Column headers:**", list(col_ref_df.columns))
+    st.write("**First few rows:**")
+    st.dataframe(col_ref_df.head(10))
+    
+    # Look for NCB-related columns
+    st.write("🔍 **Searching for NCB-related columns...**")
+    
+    # Search through all columns for NCB patterns
+    ncB_columns = []
+    for col_idx, col_name in enumerate(col_ref_df.columns):
+        col_data = col_ref_df[col_name].astype(str).str.upper()
+        
+        # Look for NCB-related content
+        ncB_patterns = ['NCB', 'AGENT NCB', 'DEALER NCB', 'ADMIN']
+        for pattern in ncB_patterns:
+            if col_data.str.contains(pattern, na=False).any():
+                st.write(f"  ✅ **Column {col_idx} ({col_name}):** Contains '{pattern}'")
+                
+                # Show sample values from this column
+                sample_values = col_ref_df[col_name].dropna().head(5)
+                st.write(f"    Sample values: {sample_values.tolist()}")
+                
+                ncB_columns.append({
+                    'column_index': col_idx,
+                    'column_name': col_name,
+                    'pattern_found': pattern,
+                    'sample_values': sample_values.tolist()
+                })
+                break
+    
+    if not ncB_columns:
+        st.write("⚠️ **No NCB-related columns found in Col Ref sheet**")
+        st.write("🔍 **Let's examine the entire Col Ref sheet more carefully...**")
+        
+        # Show more detailed analysis
+        for col_idx, col_name in enumerate(col_ref_df.columns):
+            col_data = col_ref_df[col_name].dropna()
+            if len(col_data) > 0:
+                st.write(f"  **Column {col_idx} ({col_name}):**")
+                st.write(f"    Sample values: {col_data.head(3).tolist()}")
+                st.write(f"    Data type: {col_data.dtype}")
+    
+    return col_ref_df, ncB_columns
+
+def find_ncb_columns_by_content(data_df):
+    """Find NCB columns by searching for NCB-related content in the data."""
+    st.write("🔍 **Searching for NCB columns by content in data...**")
+    
+    ncB_columns = []
+    
+    # Search through all columns for NCB patterns
+    for col_idx, col_name in enumerate(data_df.columns):
+        try:
+            # Get sample data (skip header row)
+            col_data = data_df[col_name].iloc[1:].astype(str).str.upper()
+            
+            # Look for NCB-related content
+            ncB_patterns = ['NCB', 'AGENT NCB', 'DEALER NCB', 'ADMIN']
+            for pattern in ncB_patterns:
+                if col_data.str.contains(pattern, na=False).any():
+                    matches = col_data.str.contains(pattern, na=False).sum()
+                    if matches > 5:  # Need significant matches
+                        st.write(f"  ✅ **Column {col_idx} ({col_name}):** Contains '{pattern}' ({matches} matches)")
+                        
+                        # Show sample values
+                        sample_values = data_df[col_name].iloc[1:].dropna().head(3)
+                        st.write(f"    Sample values: {sample_values.tolist()}")
+                        
+                        ncB_columns.append({
+                            'column_index': col_idx,
+                            'column_name': col_name,
+                            'pattern_found': pattern,
+                            'match_count': matches,
+                            'sample_values': sample_values.tolist()
+                        })
+                        break
+                        
+        except Exception as e:
+            continue
+    
+    if not ncB_columns:
+        st.write("⚠️ **No NCB-related columns found by content search**")
+        st.write("🔍 **Let's try a different approach...**")
+    
+    return ncB_columns
+
 def main():
     st.title("🚀 Karen NCB Data Processor - Version 3.0")
     st.write("**Expected Output:** 2k-2500 rows in specific order with proper column mapping")
@@ -438,104 +548,59 @@ def main():
     if uploaded_file is not None:
         try:
             # Load the file
-            df = pd.read_excel(uploaded_file, sheet_name=None)
+            df_dict = pd.read_excel(uploaded_file, sheet_name=None)
             
             # Show available sheets
-            st.write("🔍 **Available sheets:**", list(df.keys()))
+            st.write("🔍 **Available sheets:**", list(df_dict.keys()))
             
-            # Find the data sheet
-            data_sheet = None
-            for sheet_name in ['Data', 'data', 'DATA']:
-                if sheet_name in df:
-                    data_sheet = sheet_name
-                    break
+            # First, analyze the Col Ref sheet to understand the structure
+            col_ref_result = analyze_col_ref_sheet(df_dict)
             
-            if not data_sheet:
-                st.error("❌ **No 'Data' sheet found**")
-                return
-            
-            # Load the data sheet
-            df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
-            st.write(f"📊 **Data sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
-            
-            # Process data button
-            if st.button("🔍 **Process Data with Debug Analysis**", type="primary"):
-                with st.spinner("🔍 Running debug analysis..."):
-                    # Process the data using the debug version
-                    result = process_data_debug(df)
-                    
-                    if result is not None:
-                        nb_df, c_df, r_df = result
-                        
-                        # Display results
-                        st.write("📊 **Processing Results**")
-                        total_records = len(nb_df) + len(c_df) + len(r_df)
-                        st.write(f"**Total Records:** {total_records}")
-                        
-                        st.write("**Breakdown by Transaction Type:**")
-                        st.write(f"- NB (New Business): {len(nb_df)} records")
-                        st.write(f"- C (Cancellation): {len(c_df)} records")
-                        st.write(f"- R (Reinstatement): {len(r_df)} records")
-                        
-                        # Show sample data in collapsible sections
-                        with st.expander("📋 Sample New Business Data (First 5 rows)"):
-                            if len(nb_df) > 0:
-                                st.dataframe(nb_df.head())
-                            else:
-                                st.write("No New Business data found.")
-                        
-                        with st.expander("📋 Sample Cancellation Data (First 5 rows)"):
-                            if len(c_df) > 0:
-                                st.dataframe(c_df.head())
-                            else:
-                                st.write("No Cancellation data found.")
-                        
-                        with st.expander("📋 Sample Reinstatement Data (First 5 rows)"):
-                            if len(r_df) > 0:
-                                st.dataframe(r_df.head())
-                            else:
-                                st.write("No Reinstatement data found.")
-                        
-                        # Download options
-                        st.write("💾 **Download Options**")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            if len(nb_df) > 0:
-                                nb_download = create_excel_download_clean(nb_df, "New_Business_NB")
-                                if nb_download:
-                                    st.download_button(
-                                        label=f"📥 Download NB Data ({len(nb_df)} rows)",
-                                        data=nb_download.getvalue(),
-                                        file_name=f"NCB_New_Business_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    )
-                            
-                            if len(r_df) > 0:
-                                r_download = create_excel_download_clean(r_df, "Reinstatements_R")
-                                if r_download:
-                                    st.download_button(
-                                        label=f"📥 Download R Data ({len(r_df)} rows)",
-                                        data=r_download.getvalue(),
-                                        file_name=f"NCB_Reinstatements_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    )
-                        
-                        with col2:
-                            if len(c_df) > 0:
-                                c_download = create_excel_download_clean(c_df, "Cancellations_C")
-                                if c_download:
-                                    st.download_button(
-                                        label=f"📥 Download C Data ({len(c_df)} rows)",
-                                        data=c_download.getvalue(),
-                                        file_name=f"NCB_Cancellations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    )
-                        
-                        # Combined download
-                        st.write("📊 **Combined Download (All Data in One File)**")
-                        # This would need to be implemented if needed
+            if col_ref_result:
+                col_ref_df, ncB_columns = col_ref_result
+                
+                # Now find the data sheet
+                data_sheet = None
+                for sheet_name in ['Data', 'data', 'DATA']:
+                    if sheet_name in df_dict:
+                        data_sheet = sheet_name
+                        break
+                
+                if not data_sheet:
+                    st.error("❌ **No 'Data' sheet found**")
+                    return
+                
+                # Load the data sheet
+                df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
+                st.write(f"📊 **Data sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
+                
+                # Search for NCB columns in the data
+                ncB_columns_data = find_ncb_columns_by_content(df)
+                
+                # Show summary of what we found
+                st.write("📊 **Summary of NCB Column Analysis:**")
+                st.write(f"  - Col Ref sheet: {len(ncB_columns)} NCB-related columns found")
+                st.write(f"  - Data sheet: {len(ncB_columns_data)} NCB-related columns found")
+                
+                if ncB_columns or ncB_columns_data:
+                    st.write("✅ **NCB columns identified!** Now we can build proper processing logic.")
+                    st.write("🔄 **Next step:** Use these columns for proper Admin filtering instead of guessing.")
+                else:
+                    st.write("⚠️ **No NCB columns found.** We need to understand your data structure better.")
+                
+                # Process data button (commented out until we fix the column selection)
+                st.write("⏸️ **Processing paused** - Need to implement proper NCB column mapping first.")
+                
+                # Show what we found for manual inspection
+                if ncB_columns:
+                    st.write("🔍 **NCB Columns found in Col Ref sheet:**")
+                    for col_info in ncB_columns:
+                        st.write(f"  - Column {col_info['column_index']}: {col_info['column_name']} (contains: {col_info['pattern_found']})")
+                
+                if ncB_columns_data:
+                    st.write("🔍 **NCB Columns found in Data sheet:**")
+                    for col_info in ncB_columns_data:
+                        st.write(f"  - Column {col_info['column_index']}: {col_info['column_name']} (contains: {col_info['pattern_found']}, {col_info['match_count']} matches)")
         
         except Exception as e:
             st.error(f"❌ **Error loading file:** {str(e)}")
