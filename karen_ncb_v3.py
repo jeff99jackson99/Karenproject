@@ -230,18 +230,72 @@ def process_data_debug(df):
         # For R: sum > 0
         if len(r_df) > 0:
             admin_cols_list = list(admin_cols)
-            r_df['Admin_Sum'] = r_df[admin_cols_list].sum(axis=1)
-            r_filtered = r_df[r_df['Admin_Sum'] > 0]
-            st.write(f"  - R after Admin sum > 0 filter: {len(r_filtered)} records")
-            r_df = r_filtered
+            
+            # Convert to numeric and check for errors
+            st.write("🔄 **Converting Admin columns to numeric for R records...**")
+            numeric_admin_cols_r = []
+            
+            for col in admin_cols_list:
+                try:
+                    numeric_col = pd.to_numeric(r_df[col], errors='coerce')
+                    if not numeric_col.isna().all():
+                        numeric_admin_cols_r.append(numeric_col)
+                        st.write(f"✅ **Successfully converted {col} to numeric for R**")
+                    else:
+                        st.write(f"❌ **Failed to convert {col} to numeric for R**")
+                except Exception as e:
+                    st.write(f"❌ **Error converting {col} for R: {str(e)}**")
+            
+            if len(numeric_admin_cols_r) < 4:
+                st.write(f"⚠️ **Only {len(numeric_admin_cols_r)} Admin columns could be converted to numeric for R**")
+                # Use the ones we have
+                if len(numeric_admin_cols_r) > 0:
+                    r_df['Admin_Sum'] = pd.concat(numeric_admin_cols_r, axis=1).sum(axis=1)
+                    r_filtered = r_df[r_df['Admin_Sum'] > 0]
+                    st.write(f"  - R after Admin sum > 0 filter: {len(r_filtered)} records")
+                    r_df = r_filtered
+                else:
+                    st.write(f"  - R records skipped due to no numeric Admin columns")
+            else:
+                r_df['Admin_Sum'] = pd.concat(numeric_admin_cols_r, axis=1).sum(axis=1)
+                r_filtered = r_df[r_df['Admin_Sum'] > 0]
+                st.write(f"  - R after Admin sum > 0 filter: {len(r_filtered)} records")
+                r_df = r_filtered
         
         # For C: sum < 0
         if len(c_df) > 0:
             admin_cols_list = list(admin_cols)
-            c_df['Admin_Sum'] = c_df[admin_cols_list].sum(axis=1)
-            c_filtered = c_df[c_df['Admin_Sum'] < 0]
-            st.write(f"  - C after Admin sum < 0 filter: {len(c_filtered)} records")
-            c_df = c_filtered
+            
+            # Convert to numeric and check for errors
+            st.write("🔄 **Converting Admin columns to numeric for C records...**")
+            numeric_admin_cols_c = []
+            
+            for col in admin_cols_list:
+                try:
+                    numeric_col = pd.to_numeric(c_df[col], errors='coerce')
+                    if not numeric_col.isna().all():
+                        numeric_admin_cols_c.append(numeric_col)
+                        st.write(f"✅ **Successfully converted {col} to numeric for C**")
+                    else:
+                        st.write(f"❌ **Failed to convert {col} to numeric for C**")
+                except Exception as e:
+                    st.write(f"❌ **Error converting {col} for C: {str(e)}**")
+            
+            if len(numeric_admin_cols_c) < 4:
+                st.write(f"⚠️ **Only {len(numeric_admin_cols_c)} Admin columns could be converted to numeric for C**")
+                # Use the ones we have
+                if len(numeric_admin_cols_c) > 0:
+                    c_df['Admin_Sum'] = pd.concat(numeric_admin_cols_c, axis=1).sum(axis=1)
+                    c_filtered = c_df[c_df['Admin_Sum'] < 0]
+                    st.write(f"  - C after Admin sum < 0 filter: {len(c_filtered)} records")
+                    c_df = c_filtered
+                else:
+                    st.write(f"  - C records skipped due to no numeric Admin columns")
+            else:
+                c_df['Admin_Sum'] = pd.concat(numeric_admin_cols_c, axis=1).sum(axis=1)
+                c_filtered = c_df[c_df['Admin_Sum'] < 0]
+                st.write(f"  - C after Admin sum < 0 filter: {len(c_filtered)} records")
+                c_df = c_filtered
         
         # Create output dataframes using the working logic
         st.write("🔄 **Creating output dataframes...**")
