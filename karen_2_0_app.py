@@ -87,9 +87,67 @@ def process_excel_data_karen_2_0(uploaded_file):
         st.code(traceback.format_exc())
         return None
 
+def examine_data_structure(df):
+    """Examine the data structure to understand what we're working with."""
+    st.write("🔍 **Data Structure Analysis:**")
+    
+    # Show data types
+    st.write(f"📊 **Data types:**")
+    for i, col in enumerate(df.columns[:20]):
+        try:
+            sample_values = df.iloc[:5, i].dropna()
+            if len(sample_values) > 0:
+                st.write(f"  Column {i} ({col}): {sample_values.iloc[0]} (type: {type(sample_values.iloc[0])})")
+            else:
+                st.write(f"  Column {i} ({col}): No data")
+        except:
+            st.write(f"  Column {i} ({col}): Error reading")
+    
+    # Look for any columns that might contain transaction types
+    st.write(f"🔍 **Looking for transaction type columns...**")
+    for i, col in enumerate(df.columns):
+        try:
+            values = df.iloc[:20, i].dropna()
+            if len(values) > 0:
+                # Check if this looks like transaction types
+                str_values = [str(v).upper() for v in values]
+                if any(t in str_values for t in ['NB', 'C', 'R', 'NEW', 'CANCEL', 'REINSTATE']):
+                    st.write(f"  ✅ **Potential transaction column:** {col} (Position {i})")
+                    st.write(f"     Sample values: {str_values[:10]}")
+        except:
+            continue
+    
+    # Look for any numeric columns that might be amounts
+    st.write(f"🔍 **Looking for numeric/amount columns...**")
+    numeric_columns = []
+    for i, col in enumerate(df.columns):
+        try:
+            values = df.iloc[:50, i].dropna()
+            if len(values) > 0:
+                numeric_vals = pd.to_numeric(values, errors='coerce')
+                non_null_numeric = numeric_vals.dropna()
+                if len(non_null_numeric) > 0:
+                    non_zero = (non_null_numeric != 0).sum()
+                    if non_zero > 0:
+                        numeric_columns.append((i, col, non_zero, len(non_null_numeric)))
+        except:
+            continue
+    
+    # Sort by number of non-zero values
+    numeric_columns.sort(key=lambda x: x[2], reverse=True)
+    
+    st.write(f"🔍 **Found {len(numeric_columns)} numeric columns with non-zero values:**")
+    for i, col, non_zero, total in numeric_columns[:15]:
+        st.write(f"  Position {i}: {col} - {non_zero}/{total} non-zero values")
+    
+    return numeric_columns
+
 def find_ncb_columns_simple(df):
     """Find NCB columns by looking for Admin columns based on actual file structure."""
     ncb_columns = {}
+    
+    # First, let's examine the data structure
+    numeric_columns = examine_data_structure(df)
     
     # First, let's show all columns that might be Admin/Amount related for debugging
     st.write("🔍 **Searching for Admin/Amount columns...**")
@@ -181,39 +239,28 @@ def find_ncb_columns_simple(df):
     if len(ncb_columns) < 7:
         st.warning(f"⚠️ **Still only found {len(ncb_columns)} NCB columns. Looking for any numeric columns...**")
         
-        # Look for any columns that might be numeric and could be Admin amounts
-        for i, col in enumerate(df.columns):
+        # Use the numeric columns we found earlier
+        for i, col, non_zero, total in numeric_columns:
             if len(ncb_columns) >= 7:
                 break
                 
-            try:
-                # Check if this column has numeric values
-                values = df.iloc[:, i].dropna()
-                if len(values) > 0:
-                    numeric_vals = pd.to_numeric(values, errors='coerce')
-                    non_zero = (numeric_vals != 0).sum()
-                    
-                    # If it has some non-zero numeric values, it might be an Admin amount
-                    if non_zero > 0 and non_zero < len(values) * 0.8:  # Not all zeros, not all non-zero
-                        # Map to the next available NCB column type
-                        if 'AO' not in ncb_columns:
-                            ncb_columns['AO'] = col
-                        elif 'AQ' not in ncb_columns:
-                            ncb_columns['AQ'] = col
-                        elif 'AU' not in ncb_columns:
-                            ncb_columns['AU'] = col
-                        elif 'AW' not in ncb_columns:
-                            ncb_columns['AW'] = col
-                        elif 'AY' not in ncb_columns:
-                            ncb_columns['AY'] = col
-                        elif 'BA' not in ncb_columns:
-                            ncb_columns['BA'] = col
-                        elif 'BC' not in ncb_columns:
-                            ncb_columns['BC'] = col
-                        
-                        st.write(f"✅ **Found potential NCB column by numeric analysis:** {list(ncb_columns.keys())[-1]} → {col} (Position {i})")
-            except Exception as e:
-                continue
+            # Map to the next available NCB column type
+            if 'AO' not in ncb_columns:
+                ncb_columns['AO'] = col
+            elif 'AQ' not in ncb_columns:
+                ncb_columns['AQ'] = col
+            elif 'AU' not in ncb_columns:
+                ncb_columns['AU'] = col
+            elif 'AW' not in ncb_columns:
+                ncb_columns['AW'] = col
+            elif 'AY' not in ncb_columns:
+                ncb_columns['AY'] = col
+            elif 'BA' not in ncb_columns:
+                ncb_columns['BA'] = col
+            elif 'BC' not in ncb_columns:
+                ncb_columns['BC'] = col
+            
+            st.write(f"✅ **Found potential NCB column by numeric analysis:** {list(ncb_columns.keys())[-1]} → {col} (Position {i}) - {non_zero}/{total} non-zero")
     
     return ncb_columns
 
