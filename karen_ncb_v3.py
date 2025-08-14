@@ -106,9 +106,21 @@ def analyze_data_structure_debug(df):
                 non_zero_count = (numeric_data != 0).sum()
                 total_count = numeric_data.notna().sum()
                 
-                if non_zero_count > 5 and total_count > 10:
-                    st.write(f"✅ **Column {col} ACCEPTED as Admin column**")
-                    admin_cols.append(col)
+                # More strict criteria: need significant financial data
+                if non_zero_count > 10 and total_count > 50:
+                    # Check if this looks like financial data (not just row numbers or years)
+                    sample_values = numeric_data.dropna().head(10)
+                    if len(sample_values) > 0:
+                        # Skip columns that are just sequential numbers or years
+                        if (sample_values.diff().abs().mean() <= 1.0 or  # Sequential numbers
+                            (sample_values >= 1900).all() and (sample_values <= 2030).all()):  # Years
+                            st.write(f"  ⚠️ Column {col} rejected: appears to be row numbers or years")
+                            continue
+                        
+                        st.write(f"✅ **Column {col} ACCEPTED as Admin column**")
+                        admin_cols.append(col)
+                    else:
+                        st.write(f"  ⚠️ Column {col} rejected: insufficient data")
                 else:
                     st.write(f"  ⚠️ Column {col} rejected: insufficient data")
             else:
