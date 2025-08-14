@@ -424,104 +424,68 @@ def create_excel_download_clean(df, sheet_name):
         st.error(f"❌ **Error creating Excel download:** {str(e)}")
         return None
 
-def analyze_col_ref_sheet(df_dict):
-    """Analyze the 'Col Ref' sheet to understand column structure."""
-    st.write("🔍 **Analyzing 'Col Ref' sheet for proper column mapping...**")
+def analyze_data_tab_structure(data_df):
+    """Analyze the DATA tab structure to find NCB columns and handle dropdowns."""
+    st.write("🔍 **Analyzing DATA tab structure for NCB columns...**")
     
-    # Look for the Col Ref sheet
-    col_ref_sheet = None
-    for sheet_name in ['Col Ref', 'col ref', 'COL REF', 'ColRef', 'colref']:
-        if sheet_name in df_dict:
-            col_ref_sheet = sheet_name
+    # Handle potential dropdown issues by examining the first few rows
+    st.write("🔍 **Examining first few rows to handle dropdowns and find headers...**")
+    
+    # Show the first 5 rows to see the structure
+    st.write("**First 5 rows of DATA tab:**")
+    st.dataframe(data_df.head())
+    
+    # Look for the actual header row (might not be row 0 due to dropdowns)
+    header_row = None
+    for row_idx in range(min(5, len(data_df))):
+        row_data = data_df.iloc[row_idx]
+        # Check if this row contains NCB-related content
+        row_str = ' '.join(str(val).upper() for val in row_data if pd.notna(val))
+        if any(pattern in row_str for pattern in ['NCB', 'AGENT', 'DEALER', 'ADMIN', 'FEE', 'OFFSET']):
+            header_row = row_idx
+            st.write(f"✅ **Found header row at index {row_idx}:** Contains NCB-related content")
             break
     
-    if not col_ref_sheet:
-        st.error("❌ **No 'Col Ref' sheet found!**")
-        st.write("Available sheets:", list(df_dict.keys()))
-        return None
+    if header_row is None:
+        st.write("⚠️ **No clear header row found with NCB content**")
+        st.write("🔍 **Let's examine the data more carefully...**")
+        header_row = 0  # Default to first row
     
-    st.write(f"✅ **Found Col Ref sheet:** {col_ref_sheet}")
-    
-    # Load the Col Ref sheet
-    col_ref_df = df_dict[col_ref_sheet]
-    st.write(f"📊 **Col Ref sheet loaded:** {col_ref_df.shape[0]} rows × {col_ref_df.shape[1]} columns")
-    
-    # Show the structure of the Col Ref sheet
-    st.write("🔍 **Col Ref sheet structure:**")
-    st.write("**Column headers:**", list(col_ref_df.columns))
-    st.write("**First few rows:**")
-    st.dataframe(col_ref_df.head(10))
-    
-    # Look for NCB-related columns
-    st.write("🔍 **Searching for NCB-related columns...**")
-    
-    # Search through all columns for NCB patterns
-    ncB_columns = []
-    for col_idx, col_name in enumerate(col_ref_df.columns):
-        col_data = col_ref_df[col_name].astype(str).str.upper()
-        
-        # Look for NCB-related content
-        ncB_patterns = ['NCB', 'AGENT NCB', 'DEALER NCB', 'ADMIN']
-        for pattern in ncB_patterns:
-            if col_data.str.contains(pattern, na=False).any():
-                st.write(f"  ✅ **Column {col_idx} ({col_name}):** Contains '{pattern}'")
-                
-                # Show sample values from this column
-                sample_values = col_ref_df[col_name].dropna().head(5)
-                st.write(f"    Sample values: {sample_values.tolist()}")
-                
-                ncB_columns.append({
-                    'column_index': col_idx,
-                    'column_name': col_name,
-                    'pattern_found': pattern,
-                    'sample_values': sample_values.tolist()
-                })
-                break
-    
-    if not ncB_columns:
-        st.write("⚠️ **No NCB-related columns found in Col Ref sheet**")
-        st.write("🔍 **Let's examine the entire Col Ref sheet more carefully...**")
-        
-        # Show more detailed analysis
-        for col_idx, col_name in enumerate(col_ref_df.columns):
-            col_data = col_ref_df[col_name].dropna()
-            if len(col_data) > 0:
-                st.write(f"  **Column {col_idx} ({col_name}):**")
-                st.write(f"    Sample values: {col_data.head(3).tolist()}")
-                st.write(f"    Data type: {col_data.dtype}")
-    
-    return col_ref_df, ncB_columns
-
-def find_ncb_columns_by_content(data_df):
-    """Find NCB columns by searching for NCB-related content in the data."""
-    st.write("🔍 **Searching for NCB columns by content in data...**")
+    # Now search for NCB columns in the DATA tab
+    st.write("🔍 **Searching for NCB columns in DATA tab...**")
     
     ncB_columns = []
     
     # Search through all columns for NCB patterns
     for col_idx, col_name in enumerate(data_df.columns):
         try:
-            # Get sample data (skip header row)
-            col_data = data_df[col_name].iloc[1:].astype(str).str.upper()
+            # Get data starting from the header row
+            col_data = data_df[col_name].iloc[header_row:].astype(str).str.upper()
             
             # Look for NCB-related content
-            ncB_patterns = ['NCB', 'AGENT NCB', 'DEALER NCB', 'ADMIN']
+            ncB_patterns = ['NCB', 'AGENT NCB', 'DEALER NCB', 'ADMIN', 'FEE', 'OFFSET']
             for pattern in ncB_patterns:
                 if col_data.str.contains(pattern, na=False).any():
                     matches = col_data.str.contains(pattern, na=False).sum()
-                    if matches > 5:  # Need significant matches
+                    if matches > 3:  # Need some matches
                         st.write(f"  ✅ **Column {col_idx} ({col_name}):** Contains '{pattern}' ({matches} matches)")
                         
-                        # Show sample values
-                        sample_values = data_df[col_name].iloc[1:].dropna().head(3)
+                        # Show sample values from this column
+                        sample_values = data_df[col_name].iloc[header_row:].dropna().head(5)
                         st.write(f"    Sample values: {sample_values.tolist()}")
+                        
+                        # Check if this column contains numeric data (amounts)
+                        numeric_data = pd.to_numeric(data_df[col_name].iloc[header_row+1:], errors='coerce')
+                        if not numeric_data.isna().all():
+                            st.write(f"    ✅ **Contains numeric data:** Min={numeric_data.min():.2f}, Max={numeric_data.max():.2f}")
                         
                         ncB_columns.append({
                             'column_index': col_idx,
                             'column_name': col_name,
                             'pattern_found': pattern,
                             'match_count': matches,
-                            'sample_values': sample_values.tolist()
+                            'sample_values': sample_values.tolist(),
+                            'is_numeric': not numeric_data.isna().all() if 'numeric_data' in locals() else False
                         })
                         break
                         
@@ -529,20 +493,41 @@ def find_ncb_columns_by_content(data_df):
             continue
     
     if not ncB_columns:
-        st.write("⚠️ **No NCB-related columns found by content search**")
-        st.write("🔍 **Let's try a different approach...**")
+        st.write("⚠️ **No NCB-related columns found in DATA tab**")
+        st.write("🔍 **Let's try a broader search...**")
+        
+        # Try searching for any columns that might be financial
+        st.write("🔍 **Searching for potential financial columns...**")
+        for col_idx, col_name in enumerate(data_df.columns):
+            try:
+                # Check if column contains numeric data
+                col_data = data_df[col_name].iloc[header_row+1:]  # Skip header
+                numeric_data = pd.to_numeric(col_data, errors='coerce')
+                
+                if not numeric_data.isna().all():
+                    non_zero = (numeric_data != 0).sum()
+                    total = numeric_data.notna().sum()
+                    
+                    if non_zero > 10 and total > 50:  # Significant financial data
+                        st.write(f"  💰 **Column {col_idx} ({col_name}):** Potential financial column")
+                        st.write(f"    - Non-zero: {non_zero}/{total}")
+                        st.write(f"    - Range: {numeric_data.min():.2f} to {numeric_data.max():.2f}")
+                        
+            except Exception as e:
+                continue
     
-    return ncB_columns
+    return ncB_columns, header_row
 
 def main():
     st.title("🚀 Karen NCB Data Processor - Version 3.0")
     st.write("**Expected Output:** 2k-2500 rows in specific order with proper column mapping")
+    st.write("**Focus:** DATA tab analysis (per Karen 2.0 instructions)")
     
     # File upload
     uploaded_file = st.file_uploader(
         "📁 Upload Excel File",
         type=['xlsx', 'xls'],
-        help="Upload Excel file with NCB data and 'Col Ref' sheet"
+        help="Upload Excel file with NCB data - we'll analyze the DATA tab directly"
     )
     
     if uploaded_file is not None:
@@ -553,54 +538,51 @@ def main():
             # Show available sheets
             st.write("🔍 **Available sheets:**", list(df_dict.keys()))
             
-            # First, analyze the Col Ref sheet to understand the structure
-            col_ref_result = analyze_col_ref_sheet(df_dict)
+            # Focus on the DATA tab as per Karen 2.0 instructions
+            data_sheet = None
+            for sheet_name in ['Data', 'data', 'DATA']:
+                if sheet_name in df_dict:
+                    data_sheet = sheet_name
+                    break
             
-            if col_ref_result:
-                col_ref_df, ncB_columns = col_ref_result
+            if not data_sheet:
+                st.error("❌ **No 'Data' sheet found**")
+                st.write("Karen 2.0 instructions specify using the DATA tab")
+                return
+            
+            st.write(f"✅ **Found DATA sheet:** {data_sheet}")
+            
+            # Load the DATA sheet
+            df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
+            st.write(f"📊 **DATA sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
+            
+            # Analyze the DATA tab structure (handle dropdowns and find NCB columns)
+            ncB_columns, header_row = analyze_data_tab_structure(df)
+            
+            # Show summary of what we found
+            st.write("📊 **Summary of DATA Tab Analysis:**")
+            st.write(f"  - Header row identified at index: {header_row}")
+            st.write(f"  - NCB-related columns found: {len(ncB_columns)}")
+            
+            if ncB_columns:
+                st.write("✅ **NCB columns identified in DATA tab!**")
+                st.write("🔄 **Next step:** Use these columns for proper Admin filtering.")
                 
-                # Now find the data sheet
-                data_sheet = None
-                for sheet_name in ['Data', 'data', 'DATA']:
-                    if sheet_name in df_dict:
-                        data_sheet = sheet_name
-                        break
+                # Show what we found
+                st.write("🔍 **NCB Columns found in DATA tab:**")
+                for col_info in ncB_columns:
+                    st.write(f"  - Column {col_info['column_index']}: {col_info['column_name']}")
+                    st.write(f"    - Contains: {col_info['pattern_found']} ({col_info['match_count']} matches)")
+                    st.write(f"    - Numeric data: {'Yes' if col_info['is_numeric'] else 'No'}")
+                    st.write(f"    - Sample values: {col_info['sample_values']}")
                 
-                if not data_sheet:
-                    st.error("❌ **No 'Data' sheet found**")
-                    return
+                # Now we can build the proper processing logic
+                st.write("🎯 **Ready to implement proper NCB processing logic!**")
                 
-                # Load the data sheet
-                df = pd.read_excel(uploaded_file, sheet_name=data_sheet)
-                st.write(f"📊 **Data sheet loaded:** {df.shape[0]} rows × {df.shape[1]} columns")
-                
-                # Search for NCB columns in the data
-                ncB_columns_data = find_ncb_columns_by_content(df)
-                
-                # Show summary of what we found
-                st.write("📊 **Summary of NCB Column Analysis:**")
-                st.write(f"  - Col Ref sheet: {len(ncB_columns)} NCB-related columns found")
-                st.write(f"  - Data sheet: {len(ncB_columns_data)} NCB-related columns found")
-                
-                if ncB_columns or ncB_columns_data:
-                    st.write("✅ **NCB columns identified!** Now we can build proper processing logic.")
-                    st.write("🔄 **Next step:** Use these columns for proper Admin filtering instead of guessing.")
-                else:
-                    st.write("⚠️ **No NCB columns found.** We need to understand your data structure better.")
-                
-                # Process data button (commented out until we fix the column selection)
-                st.write("⏸️ **Processing paused** - Need to implement proper NCB column mapping first.")
-                
-                # Show what we found for manual inspection
-                if ncB_columns:
-                    st.write("🔍 **NCB Columns found in Col Ref sheet:**")
-                    for col_info in ncB_columns:
-                        st.write(f"  - Column {col_info['column_index']}: {col_info['column_name']} (contains: {col_info['pattern_found']})")
-                
-                if ncB_columns_data:
-                    st.write("🔍 **NCB Columns found in Data sheet:**")
-                    for col_info in ncB_columns_data:
-                        st.write(f"  - Column {col_info['column_index']}: {col_info['column_name']} (contains: {col_info['pattern_found']}, {col_info['match_count']} matches)")
+            else:
+                st.write("⚠️ **No NCB columns found in DATA tab.**")
+                st.write("🔍 **We need to understand your data structure better.**")
+                st.write("💡 **Tip:** Check if your Excel file has dropdown arrows that might be hiding data.")
         
         except Exception as e:
             st.error(f"❌ **Error loading file:** {str(e)}")
