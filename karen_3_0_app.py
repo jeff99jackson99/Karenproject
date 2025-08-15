@@ -76,33 +76,34 @@ def process_excel_data_karen_3_0(uploaded_file):
                 # Use the new DataFrame
                 df = new_df.reset_index(drop=True)
                 
-                        # Verify that Admin columns contain the expected data
-        st.write("🔍 **Verifying Admin column data integrity:**")
-        admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper()]
-        for col in admin_cols:
-            non_null_count = df[col].notna().sum()
-            st.write(f"  {col}: {non_null_count}/{len(df)} non-null values")
-            
-        # INSTRUCTIONS 3.0: Special focus on Admin 6, 7, 8
-        st.write("🔍 **INSTRUCTIONS 3.0 - Admin 6, 7, 8 Data Verification:**")
-        admin_678_cols = ['ADMIN 6 Amount', 'ADMIN 7 Amount', 'ADMIN 8 Amount']
-        for col in admin_678_cols:
-            if col in df.columns:
-                col_data = df[col]
-                non_null_count = col_data.notna().sum()
-                st.write(f"  {col}:")
-                st.write(f"    Non-null values: {non_null_count}/{len(df)}")
-                if non_null_count > 0:
-                    # Show sample values
-                    sample_vals = col_data.dropna().head(5).tolist()
-                    st.write(f"    Sample values: {sample_vals}")
-                    # Check for negative values (important for cancellations)
-                    numeric_data = pd.to_numeric(col_data, errors='coerce')
-                    negative_count = (numeric_data < 0).sum()
-                    st.write(f"    Negative values: {negative_count}")
-            else:
-                st.error(f"  ❌ {col} NOT FOUND in columns!")
-                st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
+                # Verify that Admin columns contain the expected data
+                st.write("🔍 **Verifying Admin column data integrity:**")
+                admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper()]
+                for col in admin_cols:
+                    non_null_count = df[col].notna().sum()
+                    st.write(f"  {col}: {non_null_count}/{len(df)} non-null values")
+                    
+                # INSTRUCTIONS 3.0: Special focus on Admin 6, 7, 8
+                st.write("🔍 **INSTRUCTIONS 3.0 - Admin 6, 7, 8 Data Verification:**")
+                admin_678_cols = ['ADMIN 6 Amount', 'ADMIN 7 Amount', 'ADMIN 8 Amount']
+                for col in admin_678_cols:
+                    if col in df.columns:
+                        col_data = df[col]
+                        non_null_count = col_data.notna().sum()
+                        st.write(f"  {col}:")
+                        st.write(f"    Non-null values: {non_null_count}/{len(df)}")
+                        if non_null_count > 0:
+                            # Show sample values
+                            sample_vals = col_data.dropna().head(5).tolist()
+                            st.write(f"    Sample values: {sample_vals}")
+                            # Check for negative values (important for cancellations)
+                            numeric_data = pd.to_numeric(col_data, errors='coerce')
+                            negative_count = (numeric_data < 0).sum()
+                            st.write(f"    Negative values: {negative_count}")
+                    else:
+                        st.error(f"  ❌ {col} NOT FOUND in columns!")
+                        st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
+
                 
                 # Clean duplicate column names to prevent DataFrame vs Series issues
                 df = clean_duplicate_columns(df)
