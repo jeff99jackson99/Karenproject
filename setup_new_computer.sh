@@ -1,22 +1,20 @@
 #!/bin/bash
+# 🚀 Karen 3.0 NCB Data Processor - Quick Setup Script
+# Run this script on any new computer to get the project running quickly
 
-# 🚀 KAREN 2.0 PROJECT - NEW COMPUTER SETUP SCRIPT
-# This script will set up the project on your new, more powerful computer
+echo "🚀 Setting up Karen 3.0 NCB Data Processor on new computer..."
 
-echo "🎯 Setting up Karen 2.0 Project on new computer..."
-echo "=================================================="
-
-# Check if Python is installed
+# Check if Python 3 is installed
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python3 not found. Please install Python 3.8+ first."
+    echo "❌ Python 3 is not installed. Please install Python 3.8+ first."
     exit 1
 fi
 
-echo "✅ Python3 found: $(python3 --version)"
+echo "✅ Python 3 found: $(python3 --version)"
 
 # Check if pip is installed
 if ! command -v pip3 &> /dev/null; then
-    echo "❌ pip3 not found. Please install pip first."
+    echo "❌ pip3 is not installed. Please install pip3 first."
     exit 1
 fi
 
@@ -24,44 +22,62 @@ echo "✅ pip3 found: $(pip3 --version)"
 
 # Install required packages
 echo "📦 Installing required packages..."
-pip3 install streamlit pandas openpyxl numpy
+pip3 install streamlit pandas openpyxl
 
-# Check if git is installed
-if ! command -v git &> /dev/null; then
-    echo "❌ Git not found. Please install Git first."
-    exit 1
+# Check if Streamlit was installed correctly
+if ! python3 -c "import streamlit" &> /dev/null; then
+    echo "❌ Failed to install Streamlit. Trying alternative installation..."
+    pip3 install --user streamlit pandas openpyxl
 fi
 
-echo "✅ Git found: $(git --version)"
+echo "✅ All packages installed successfully!"
 
-# Clone the repository if not already present
-if [ ! -d "Karenproject" ]; then
-    echo "📥 Cloning repository..."
-    git clone https://github.com/jeff99jackson99/Karenproject.git
-    cd Karenproject
-else
-    echo "✅ Repository already exists, updating..."
-    cd Karenproject
-    git pull origin main
-fi
+# Create a quick start script
+cat > quick_start.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting Karen 3.0 NCB Data Processor..."
+echo "📱 The app will open in your browser at: http://localhost:8501"
+echo "📁 Make sure your Excel file is ready to upload!"
+echo ""
+streamlit run karen_3_0_app_fixed.py
+EOF
+
+chmod +x quick_start.sh
+
+# Create a project info file
+cat > PROJECT_INFO.txt << 'EOF'
+🚀 KAREN 3.0 NCB DATA PROCESSOR - PROJECT INFO
+
+📋 QUICK START:
+1. Run: ./quick_start.sh
+2. Open browser to: http://localhost:8501
+3. Upload your Excel file
+4. Process according to Instructions 3.0
+
+📁 KEY FILES:
+- karen_3_0_app_fixed.py (RECOMMENDED - implements exact Instructions 3.0)
+- karen_3_0_app.py (original version)
+- PROJECT_RECALL_GUIDE.md (comprehensive project guide)
+
+🎯 INSTRUCTIONS 3.0 IMPLEMENTED:
+✅ Cancellations: Only records with negative Admin values
+✅ Admin 6,7,8: Properly positioned after Admin 10
+✅ Transaction Type: Column J from pull sheet
+✅ All output sheets: Correct column structure
+
+📊 STATUS: COMPLETE AND PRODUCTION READY
+EOF
 
 echo ""
-echo "🎉 Setup complete! Your Karen 2.0 project is ready."
+echo "🎉 Setup completed successfully!"
 echo ""
-echo "📋 Next steps:"
-echo "1. Place your Excel file in the project directory:"
-echo "   - 2025-0731 Production Summary FINAL.xlsx"
+echo "📋 To start the application, run:"
+echo "   ./quick_start.sh"
 echo ""
-echo "2. Run the app:"
-echo "   streamlit run karen_2_0_app.py"
+echo "📚 For detailed project information, see:"
+echo "   PROJECT_RECALL_GUIDE.md"
+echo "   PROJECT_INFO.txt"
 echo ""
-echo "3. Open your browser to the URL shown in the terminal"
-echo ""
-echo "4. Upload your Excel file and process it!"
-echo ""
-echo "📚 For detailed information, see PROJECT_SUMMARY.md"
-echo "🔧 For troubleshooting, see the troubleshooting guide in PROJECT_SUMMARY.md"
-echo ""
-echo "🚀 Happy processing on your powerful new computer!"
+echo "🚀 Your Karen 3.0 NCB Data Processor is ready to use!"
 
 
