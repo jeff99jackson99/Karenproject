@@ -111,8 +111,12 @@ def process_excel_data_karen_3_0(uploaded_file):
                             
                             # CRITICAL: Ensure the column is properly converted to numeric
                             st.write(f"    Converting {col} to numeric to preserve data...")
-                            df[col] = pd.to_numeric(col_data, errors='coerce')
+                            # Use fillna(0) only for NaN values, preserve actual negative values
+                            numeric_converted = pd.to_numeric(col_data, errors='coerce')
+                            # Fill NaN with 0, but keep actual values (including negatives)
+                            df[col] = numeric_converted.fillna(0)
                             st.write(f"    After conversion - non-null: {df[col].notna().sum()}, sample: {df[col].dropna().head(3).tolist()}")
+                            st.write(f"    Negative values preserved: {(df[col] < 0).sum()}")
                     else:
                         st.error(f"  ❌ {col} NOT FOUND in columns!")
                         st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
