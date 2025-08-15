@@ -61,7 +61,10 @@ def process_excel_data_karen_3_0(uploaded_file):
                 # CRITICAL FIX: Use a more robust approach to preserve data integrity
                 # Create a new DataFrame with proper column names and data
                 data_rows = df.iloc[13:].copy()
-                new_df = pd.DataFrame(data_rows.values, columns=header_row)
+                
+                # Use assign method to preserve data types and values exactly
+                new_df = data_rows.copy()
+                new_df.columns = header_row
                 
                 # Verify the data was preserved correctly
                 st.write("🔍 **Verifying data preservation after column name assignment:**")
@@ -72,6 +75,11 @@ def process_excel_data_karen_3_0(uploaded_file):
                         original_non_null = original_data.notna().sum()
                         new_non_null = new_data.notna().sum()
                         st.write(f"  {col}: Original non-null: {original_non_null}, New non-null: {new_non_null}")
+                        
+                        # Show actual sample values to verify data integrity
+                        if original_non_null > 0:
+                            st.write(f"    Original sample values: {original_data.dropna().head(3).tolist()}")
+                            st.write(f"    New sample values: {new_data.dropna().head(3).tolist()}")
                 
                 # Use the new DataFrame
                 df = new_df.reset_index(drop=True)
@@ -100,6 +108,11 @@ def process_excel_data_karen_3_0(uploaded_file):
                             numeric_data = pd.to_numeric(col_data, errors='coerce')
                             negative_count = (numeric_data < 0).sum()
                             st.write(f"    Negative values: {negative_count}")
+                            
+                            # CRITICAL: Ensure the column is properly converted to numeric
+                            st.write(f"    Converting {col} to numeric to preserve data...")
+                            df[col] = pd.to_numeric(col_data, errors='coerce')
+                            st.write(f"    After conversion - non-null: {df[col].notna().sum()}, sample: {df[col].dropna().head(3).tolist()}")
                     else:
                         st.error(f"  ❌ {col} NOT FOUND in columns!")
                         st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
