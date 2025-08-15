@@ -327,8 +327,24 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         df_copy['Admin_Sum'] = df_copy[ncb_cols].sum(axis=1)
         
         # INSTRUCTIONS 3.0: For cancellations, ONLY include records with negative values
-        # This is the key change - we don't sum, we check individual columns
-        c_negative_mask = df_copy[ncb_cols] < 0
+        # Check specific Admin columns: 3,4,9,10,6,7,8 for negative values
+        admin_cols_for_cancellations = [
+            ncb_columns.get('AO'),  # Admin 3 Amount
+            ncb_columns.get('AQ'),  # Admin 4 Amount
+            ncb_columns.get('BA'),  # Admin 9 Amount
+            ncb_columns.get('BC'),  # Admin 10 Amount
+            ncb_columns.get('AU'),  # Admin 6 Amount (AT label, AU amount)
+            ncb_columns.get('AW'),  # Admin 7 Amount (AV label, AW amount)
+            ncb_columns.get('AY')   # Admin 8 Amount (AX label, AY amount)
+        ]
+        
+        # Filter out None values
+        admin_cols_for_cancellations = [col for col in admin_cols_for_cancellations if col is not None]
+        
+        st.write(f"🔍 **Admin columns checked for cancellation filtering:** {admin_cols_for_cancellations}")
+        
+        # Check if ANY of these Admin columns has negative value
+        c_negative_mask = df_copy[admin_cols_for_cancellations] < 0
         c_has_negative = c_negative_mask.any(axis=1)
         
         # Apply filtering with target range adjustment
@@ -381,6 +397,10 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         # INSTRUCTIONS 3.0: Add Admin 6,7,8 after Admin 10 Amount
         
         # Data Set 1: New Business (NB) - 17 columns
+        # INSTRUCTIONS: Admin 6,7,8 after Admin 10 Amount
+        # 6 comes from AT label, AU amount (position 46)
+        # 7 comes from AV label, AW amount (position 48)  
+        # 8 comes from AX label, AY amount (position 50)
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
@@ -391,16 +411,20 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         ]
         
         # Data Set 2: Reinstatements (R) - 17 columns
+        # INSTRUCTIONS: Admin 6,7,8 after Admin 10 Amount
+        # Transaction type in output sheet is in column I but in input sheet it's in column J
         r_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'),  # Transaction Type (column J) - SINGLE COLUMN
+            required_cols.get('L'), required_cols.get('J'),  # Transaction Type (column J from input)
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
             ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
             ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY')  # Admin 6,7,8 Amount
         ]
         
         # Data Set 3: Cancellations (C) - 21 columns
+        # INSTRUCTIONS: Admin 6,7,8 after Admin 10 Amount
+        # Check specific Admin columns: 3,4,9,10,6,7,8 for negative values
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
@@ -426,9 +450,28 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         c_output = c_filtered[c_output_cols].copy()
         
         # CRITICAL: Replace Admin columns with the converted numeric data from df_copy
+        # INSTRUCTIONS 3.0: Ensure Admin 6,7,8 are populated from exact locations
+        # 6: AT label, AU amount (position 46)
+        # 7: AV label, AW amount (position 48)  
+        # 8: AX label, AY amount (position 50)
         for col in ['AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']:
             if col in ncb_columns:
                 admin_col_name = ncb_columns[col]
+                
+                # Special verification for Admin 6,7,8
+                if col in ['AU', 'AW', 'AY']:
+                    st.write(f"  🔍 **VERIFYING {admin_col_name} (Admin {col}):**")
+                    if admin_col_name in df_copy.columns:
+                        # Show sample data to verify it's coming from the right location
+                        sample_data = df_copy[admin_col_name].dropna().head(3).tolist()
+                        st.write(f"    Sample data from {admin_col_name}: {sample_data}")
+                        
+                        # Count negative values (important for cancellations)
+                        negative_count = (df_copy[admin_col_name] < 0).sum()
+                        st.write(f"    Negative values in {admin_col_name}: {negative_count}")
+                    else:
+                        st.error(f"    ❌ {admin_col_name} not found in df_copy!")
+                
                 if admin_col_name in df_copy.columns and admin_col_name in nb_output.columns:
                     # Get the converted numeric data for the filtered rows
                     filtered_indices = nb_filtered.index
