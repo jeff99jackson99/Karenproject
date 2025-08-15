@@ -136,12 +136,22 @@ def find_ncb_columns_karen_3_0(df):
         st.write("🔍 **Admin column mapping:**")
         for key, col in ncb_columns.items():
             st.write(f"  {key}: {col}")
+        
+        # Show all columns that contain "ADMIN" for verification
+        admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper()]
+        st.write(f"🔍 **All columns containing 'ADMIN':** {admin_cols}")
+        
         return ncb_columns
     else:
         st.error(f"❌ **Not enough NCB columns found. Need 7, found {len(ncb_columns)}**")
         st.write("🔍 **Columns found:**")
         for key, col in ncb_columns.items():
             st.write(f"  {key}: {col}")
+        
+        # Show all columns that contain "ADMIN" for debugging
+        admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper()]
+        st.write(f"🔍 **All columns containing 'ADMIN':** {admin_cols}")
+        
         return None
 
 def find_required_columns_karen_3_0(df):
@@ -217,17 +227,35 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         df_copy = df.copy()
         
         # Convert all Admin columns to numeric
+        st.write("🔍 **DEBUGGING ADMIN COLUMNS:**")
         for col in ncb_cols:
             if col in df_copy.columns:
+                st.write(f"🔍 **Processing column:** {col}")
+                
+                # Show raw data types and unique values
+                st.write(f"  Data type: {df_copy[col].dtype}")
+                st.write(f"  Unique values: {df_copy[col].unique()[:10].tolist()}")
+                
                 # Show sample values before conversion
                 sample_vals = df_copy[col].dropna().head(5).tolist()
-                st.write(f"🔍 **{col} sample values before conversion:** {sample_vals}")
+                st.write(f"  Sample values before conversion: {sample_vals}")
+                
+                # Check for None/NaN values
+                none_count = df_copy[col].isna().sum()
+                st.write(f"  None/NaN count: {none_count}")
                 
                 df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0)
                 
                 # Show sample values after conversion
                 sample_vals_after = df_copy[col].head(5).tolist()
-                st.write(f"🔍 **{col} sample values after conversion:** {sample_vals_after}")
+                st.write(f"  Sample values after conversion: {sample_vals_after}")
+                
+                # Check for negative values (important for cancellations)
+                negative_count = (df_copy[col] < 0).sum()
+                st.write(f"  Negative values count: {negative_count}")
+            else:
+                st.error(f"❌ **Column {col} not found in dataframe!**")
+                st.write(f"  Available columns: {[c for c in df_copy.columns if 'ADMIN' in str(c).upper()]}")
         
         # Calculate Admin_Sum for NB and R filtering
         df_copy['Admin_Sum'] = df_copy[ncb_cols].sum(axis=1)
