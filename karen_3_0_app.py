@@ -76,12 +76,33 @@ def process_excel_data_karen_3_0(uploaded_file):
                 # Use the new DataFrame
                 df = new_df.reset_index(drop=True)
                 
-                # Verify that Admin columns contain the expected data
-                st.write("🔍 **Verifying Admin column data integrity:**")
-                admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper()]
-                for col in admin_cols:
-                    non_null_count = df[col].notna().sum()
-                    st.write(f"  {col}: {non_null_count}/{len(df)} non-null values")
+                        # Verify that Admin columns contain the expected data
+        st.write("🔍 **Verifying Admin column data integrity:**")
+        admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper()]
+        for col in admin_cols:
+            non_null_count = df[col].notna().sum()
+            st.write(f"  {col}: {non_null_count}/{len(df)} non-null values")
+            
+        # INSTRUCTIONS 3.0: Special focus on Admin 6, 7, 8
+        st.write("🔍 **INSTRUCTIONS 3.0 - Admin 6, 7, 8 Data Verification:**")
+        admin_678_cols = ['ADMIN 6 Amount', 'ADMIN 7 Amount', 'ADMIN 8 Amount']
+        for col in admin_678_cols:
+            if col in df.columns:
+                col_data = df[col]
+                non_null_count = col_data.notna().sum()
+                st.write(f"  {col}:")
+                st.write(f"    Non-null values: {non_null_count}/{len(df)}")
+                if non_null_count > 0:
+                    # Show sample values
+                    sample_vals = col_data.dropna().head(5).tolist()
+                    st.write(f"    Sample values: {sample_vals}")
+                    # Check for negative values (important for cancellations)
+                    numeric_data = pd.to_numeric(col_data, errors='coerce')
+                    negative_count = (numeric_data < 0).sum()
+                    st.write(f"    Negative values: {negative_count}")
+            else:
+                st.error(f"  ❌ {col} NOT FOUND in columns!")
+                st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
                 
                 # Clean duplicate column names to prevent DataFrame vs Series issues
                 df = clean_duplicate_columns(df)
@@ -280,7 +301,7 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         # Calculate Admin_Sum for NB and R filtering
         df_copy['Admin_Sum'] = df_copy[ncb_cols].sum(axis=1)
         
-        # INSTRUCTIONS 3.0: For cancellations, check if ANY Admin column has negative value
+        # INSTRUCTIONS 3.0: For cancellations, ONLY include records with negative values
         # This is the key change - we don't sum, we check individual columns
         c_negative_mask = df_copy[ncb_cols] < 0
         c_has_negative = c_negative_mask.any(axis=1)
@@ -290,6 +311,11 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         nb_strict = nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)]
         r_strict = r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum'] > 0].index)]
         c_strict = c_df[c_df.index.isin(df_copy[c_has_negative].index)]
+        
+        st.write(f"🔍 **Cancellation filtering details:**")
+        st.write(f"  Total cancellation records: {len(c_df)}")
+        st.write(f"  Records with ANY negative Admin value: {c_has_negative.sum()}")
+        st.write(f"  Records kept after filtering: {len(c_strict)}")
         
         # Calculate how many more records we need to reach target
         current_total = len(nb_strict) + len(r_strict) + len(c_strict)
@@ -333,7 +359,7 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
+            required_cols.get('L'), required_cols.get('J'),  # Transaction Type (column J) - SINGLE COLUMN
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
             ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
             ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY')  # Admin 6,7,8 Amount
@@ -343,7 +369,7 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         r_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
+            required_cols.get('L'), required_cols.get('J'),  # Transaction Type (column J) - SINGLE COLUMN
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
             ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
             ncb_columns.get('AU'), ncb_columns.get('AW'), ncb_columns.get('AY')  # Admin 6,7,8 Amount
@@ -353,7 +379,7 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
+            required_cols.get('L'), required_cols.get('J'),  # Transaction Type (column J) - SINGLE COLUMN
             required_cols.get('U'), required_cols.get('Z'), required_cols.get('AA'),
             required_cols.get('AB'), required_cols.get('AE'), ncb_columns.get('AO'),
             ncb_columns.get('AQ'), ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
