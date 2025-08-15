@@ -111,30 +111,37 @@ def find_ncb_columns_karen_3_0(df):
     ncb_columns = {}
     
     # INSTRUCTIONS 3.0: We need Admin 3,4,6,7,8,9,10 columns
-    # Based on the actual file structure we verified:
-    # Admin 3 Amount: Position 40 (AO)
-    # Admin 4 Amount: Position 42 (AQ) 
-    # Admin 6 Amount: Position 46 (AU) - Column AT label, AU amount
-    # Admin 7 Amount: Position 48 (AW) - Column AV label, AW amount
-    # Admin 8 Amount: Position 50 (AY) - Column AX label, AY amount
-    # Admin 9 Amount: Position 52 (BA)
-    # Admin 10 Amount: Position 54 (BC)
+    # Find columns by their actual names instead of hardcoded positions
     
-    if len(df.columns) >= 55:
-        ncb_columns = {
-            'AO': df.columns[40],  # ADMIN 3 Amount
-            'AQ': df.columns[42],  # ADMIN 4 Amount
-            'AU': df.columns[46],  # ADMIN 6 Amount (Column AT label, AU amount)
-            'AW': df.columns[48],  # ADMIN 7 Amount (Column AV label, AW amount)
-            'AY': df.columns[50],  # ADMIN 8 Amount (Column AX label, AY amount)
-            'BA': df.columns[52],  # ADMIN 9 Amount
-            'BC': df.columns[54]   # ADMIN 10 Amount
-        }
+    for col in df.columns:
+        col_str = str(col).upper()
         
+        if 'ADMIN 3' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['AO'] = col
+        elif 'ADMIN 4' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['AQ'] = col
+        elif 'ADMIN 6' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['AU'] = col  # Column AT label, AU amount
+        elif 'ADMIN 7' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['AW'] = col  # Column AV label, AW amount
+        elif 'ADMIN 8' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['AY'] = col  # Column AX label, AY amount
+        elif 'ADMIN 9' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['BA'] = col
+        elif 'ADMIN 10' in col_str and 'AMOUNT' in col_str:
+            ncb_columns['BC'] = col
+    
+    if len(ncb_columns) >= 7:
         st.success(f"✅ **Found all 7 NCB columns for Karen 3.0**")
+        st.write("🔍 **Admin column mapping:**")
+        for key, col in ncb_columns.items():
+            st.write(f"  {key}: {col}")
         return ncb_columns
     else:
-        st.error(f"❌ **Not enough columns. Need at least 55, found {len(df.columns)}**")
+        st.error(f"❌ **Not enough NCB columns found. Need 7, found {len(ncb_columns)}**")
+        st.write("🔍 **Columns found:**")
+        for key, col in ncb_columns.items():
+            st.write(f"  {key}: {col}")
         return None
 
 def find_required_columns_karen_3_0(df):
@@ -212,7 +219,15 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         # Convert all Admin columns to numeric
         for col in ncb_cols:
             if col in df_copy.columns:
+                # Show sample values before conversion
+                sample_vals = df_copy[col].dropna().head(5).tolist()
+                st.write(f"🔍 **{col} sample values before conversion:** {sample_vals}")
+                
                 df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0)
+                
+                # Show sample values after conversion
+                sample_vals_after = df_copy[col].head(5).tolist()
+                st.write(f"🔍 **{col} sample values after conversion:** {sample_vals_after}")
         
         # Calculate Admin_Sum for NB and R filtering
         df_copy['Admin_Sum'] = df_copy[ncb_cols].sum(axis=1)
