@@ -58,10 +58,30 @@ def process_excel_data_karen_3_0(uploaded_file):
                 header_row = df.iloc[12]
                 st.write(f"🔍 **Header row (Row 12):** {header_row[:20].tolist()}")
                 
-                # Use row 12 as column names
-                df.columns = header_row
-                # Remove rows 0-12 (they're not data) and reset index
-                df = df.iloc[13:].reset_index(drop=True)
+                # CRITICAL FIX: Use a more robust approach to preserve data integrity
+                # Create a new DataFrame with proper column names and data
+                data_rows = df.iloc[13:].copy()
+                new_df = pd.DataFrame(data_rows.values, columns=header_row)
+                
+                # Verify the data was preserved correctly
+                st.write("🔍 **Verifying data preservation after column name assignment:**")
+                for i, col in enumerate(header_row):
+                    if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper():
+                        original_data = data_rows.iloc[:, i]
+                        new_data = new_df[col]
+                        original_non_null = original_data.notna().sum()
+                        new_non_null = new_data.notna().sum()
+                        st.write(f"  {col}: Original non-null: {original_non_null}, New non-null: {new_non_null}")
+                
+                # Use the new DataFrame
+                df = new_df.reset_index(drop=True)
+                
+                # Verify that Admin columns contain the expected data
+                st.write("🔍 **Verifying Admin column data integrity:**")
+                admin_cols = [col for col in df.columns if 'ADMIN' in str(col).upper() and 'AMOUNT' in str(col).upper()]
+                for col in admin_cols:
+                    non_null_count = df[col].notna().sum()
+                    st.write(f"  {col}: {non_null_count}/{len(df)} non-null values")
                 
                 # Clean duplicate column names to prevent DataFrame vs Series issues
                 df = clean_duplicate_columns(df)
