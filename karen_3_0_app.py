@@ -117,6 +117,13 @@ def process_excel_data_karen_3_0(uploaded_file):
                             df[col] = numeric_converted.fillna(0)
                             st.write(f"    After conversion - non-null: {df[col].notna().sum()}, sample: {df[col].dropna().head(3).tolist()}")
                             st.write(f"    Negative values preserved: {(df[col] < 0).sum()}")
+                            
+                            # CRITICAL: Show actual negative values to prove they exist
+                            negative_values = df[col][df[col] < 0]
+                            if len(negative_values) > 0:
+                                st.write(f"    Actual negative values found: {negative_values.head(5).tolist()}")
+                            else:
+                                st.write(f"    ⚠️ No negative values found - this may indicate an issue")
                     else:
                         st.error(f"  ❌ {col} NOT FOUND in columns!")
                         st.write(f"    Available Admin columns: {[c for c in df.columns if 'ADMIN' in str(c).upper()]}")
