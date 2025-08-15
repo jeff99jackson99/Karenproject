@@ -11,6 +11,29 @@ import io
 
 st.set_page_config(page_title="Karen 3.0 NCB Data Processor", page_icon="📊", layout="wide")
 
+def clean_duplicate_columns(df):
+    """Clean duplicate column names by adding suffixes."""
+    # Check for duplicate column names
+    duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+    
+    if duplicate_cols:
+        # Create a mapping of old names to new names with suffixes
+        new_names = []
+        seen_names = {}
+        
+        for col_name in df.columns:
+            if col_name in seen_names:
+                seen_names[col_name] += 1
+                new_names.append(f"{col_name}_{seen_names[col_name]}")
+            else:
+                seen_names[col_name] = 0
+                new_names.append(col_name)
+        
+        df.columns = new_names
+        st.write(f"🔧 **Cleaned duplicate column names:** {duplicate_cols}")
+    
+    return df
+
 def process_excel_data_karen_3_0(uploaded_file):
     """Process Excel data from the Data tab for Karen 3.0."""
     try:
@@ -39,6 +62,10 @@ def process_excel_data_karen_3_0(uploaded_file):
                 df.columns = header_row
                 # Remove rows 0-12 (they're not data) and reset index
                 df = df.iloc[13:].reset_index(drop=True)
+                
+                # Clean duplicate column names to prevent DataFrame vs Series issues
+                df = clean_duplicate_columns(df)
+                
                 st.write(f"📏 Data shape after header fix: {df.shape}")
                 
                 # Find NCB columns by looking for Admin columns
@@ -158,9 +185,16 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         st.write("  - Cancellations (C): ANY Admin column (3,4,6,7,8,9,10) has negative value")
         
         # Apply transaction filtering
-        nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
-        c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
-        r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
+        # Handle case where transaction_col might return a DataFrame due to duplicate column names
+        if isinstance(df[transaction_col], pd.DataFrame):
+            transaction_series = df[transaction_col].iloc[:, 0]  # Take first column if DataFrame
+            st.write(f"⚠️ **Warning: Found duplicate column names, using first 'Transaction Type' column**")
+        else:
+            transaction_series = df[transaction_col]
+        
+        nb_mask = transaction_series.astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
+        c_mask = transaction_series.astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
+        r_mask = transaction_series.astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
         
         nb_df = df[nb_mask].copy()
         c_df = df[c_mask].copy()
