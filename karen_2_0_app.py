@@ -247,7 +247,7 @@ def find_required_columns_simple(df):
         elif 'TRANSACTION' in col_str and 'DATE' in col_str:
             required_cols['J'] = col
         elif 'TRANSACTION' in col_str and 'TYPE' in col_str:
-            required_cols['M'] = col
+            required_cols['J'] = col  # INSTRUCTIONS 3.0: Transaction Type is column J
         elif 'CUSTOMER' in col_str and 'LAST' in col_str and 'NAME' in col_str:
             required_cols['U'] = col
         elif 'TERM' in col_str and 'MONTHS' in col_str:
@@ -273,7 +273,7 @@ def find_required_columns_simple(df):
             7: 'H',   # Contract Number - Column 7
             11: 'L',  # Contract Sale Date - Column 11
             8: 'J',   # Transaction Date - Column 8
-            9: 'M',   # Transaction Type - Column 9
+            9: 'J',   # Transaction Type - Column 9 (INSTRUCTIONS 3.0)
             12: 'U',  # Customer Last Name - Column 12
             20: 'Z',  # Term Months (Contract Term) - Column 20
             27: 'AA', # Cancellation Factor - Column 27
@@ -322,28 +322,22 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         # Find transaction type column using the working approach
         transaction_col = None
         
-        # 🔍 IMPROVED TRANSACTION COLUMN DETECTION - PRIORITIZE ACTUAL TRANSACTION DATA
-        # First, look for columns that contain the actual transaction type values (NB, C, R)
-        # This is the most reliable method since we know these values exist
-        for col in df.columns:
-            col_data = df[col]
+        # 🔍 INSTRUCTIONS 3.0: Transaction Type is column J from the pull sheet
+        # Column J corresponds to index 9 in the DataFrame
+        if len(df.columns) > 9:
+            transaction_col = df.columns[9]  # Column J (index 9)
+            st.write(f"✅ **INSTRUCTIONS 3.0: Using column J for Transaction Type:** {transaction_col}")
+            
+            # Verify this column contains transaction types
+            col_data = df[transaction_col]
             if hasattr(col_data, 'dtype') and col_data.dtype == 'object':
-                # Check if this column contains the actual transaction type values
-                # Skip the first row (header) and count NB, C, R values in the entire column
                 nb_count = (col_data.iloc[1:] == 'NB').sum()
                 c_count = (col_data.iloc[1:] == 'C').sum()
                 r_count = (col_data.iloc[1:] == 'R').sum()
-                
-                # If we find significant counts of actual transaction types, this is our column
-                if nb_count > 100 or c_count > 100 or r_count > 1:  # NB and C should have many records
-                    transaction_col = col
-                    st.write(f"✅ **Found transaction column by actual values:** {col}")
-                    st.write(f"  NB count: {nb_count}, C count: {c_count}, R count: {r_count}")
-                    
-                    # Get sample values for display
-                    sample_vals = col_data.iloc[1:].dropna().head(10).tolist()
-                    st.write(f"  Sample values: {sample_vals}")
-                    break
+                st.write(f"  Transaction type counts: NB={nb_count}, C={c_count}, R={r_count}")
+        else:
+            st.error("❌ **Column J not found for Transaction Type!**")
+            return
         
         # If not found by actual values, look for columns with names indicating transaction types
         if not transaction_col:
@@ -384,15 +378,18 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
             return
         
         # 🔍 FORCE CORRECT KAREN 2.0 APPROACH - NO DEBUGGER
-        st.write("🎯 **FORCING CORRECT KAREN 2.0 FILTERING RULES (NO DEBUGGER)**")
+        st.write("🎯 **INSTRUCTIONS 3.0 FILTERING RULES**")
         st.write("  - New Business (NB): Admin_Sum > 0 (strictly positive)")
         st.write("  - Reinstatements (R): Admin_Sum > 0 (strictly positive)")
-        st.write("  - Cancellations (C): Admin_Sum < 0 (strictly negative)")
+        st.write("  - Cancellations (C): ANY Admin column (3,4,6,7,8,9,10) has negative value")
         
         # Apply CORRECT Karen 2.0 filtering rules directly
         nb_mask = df[transaction_col].astype(str).str.upper().isin(['NB', 'NEW BUSINESS', 'NEW'])
         c_mask = df[transaction_col].astype(str).str.upper().isin(['C', 'CANCELLATION', 'CANCEL'])
         r_mask = df[transaction_col].astype(str).str.upper().isin(['R', 'REINSTATEMENT', 'REINSTATE'])
+        
+        # INSTRUCTIONS 3.0: For cancellations, only include if it produces negative in any Admin column
+        # We'll filter this after calculating Admin sums
         
         nb_df = df[nb_mask].copy()
         c_df = df[c_mask].copy()
@@ -401,14 +398,18 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         # Calculate Admin sum using the WORKING APPROACH (4 columns only)
         # This matches what smart_ncb_app.py used successfully
         # Use the actual column indices since the column names contain headers in row 0
+        # INSTRUCTIONS 3.0: Add Admin 6, 7, 8 columns
         working_admin_cols = [
             df.columns[40],  # ADMIN 3 Amount (AO)
             df.columns[42],  # ADMIN 4 Amount (AQ)
+            df.columns[46],  # ADMIN 6 Amount (AU) - Column AT label, AU amount
+            df.columns[48],  # ADMIN 7 Amount (AW) - Column AV label, AW amount  
+            df.columns[50],  # ADMIN 8 Amount (AY) - Column AX label, AY amount
             df.columns[52],  # ADMIN 9 Amount (BA)
             df.columns[54]   # ADMIN 10 Amount (BC)
         ]
         
-        st.write(f"✅ **Using WORKING APPROACH with 4 Admin columns:** {working_admin_cols}")
+        st.write(f"✅ **INSTRUCTIONS 3.0: Using 7 Admin columns:** {working_admin_cols}")
         
         df_copy = df.copy()
         
@@ -433,12 +434,16 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         # Strategy: Include some zero-value NB transactions to reach target range
         # NB: sum > 0 (strictly positive) + some sum = 0 (zero)
         # R: sum > 0 (strictly positive)
-        # C: sum <= 0 (zero or negative)
+        # C: INSTRUCTIONS 3.0: Only include if ANY Admin column has negative value
         
         # First, get the high-value transactions
         nb_positive = nb_df[nb_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] > 0].index)]
         r_filtered = r_df[r_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] > 0].index)]
-        c_filtered = c_df[c_df.index.isin(df_copy[df_copy['Admin_Sum_Numeric'] <= 0].index)]
+        
+        # INSTRUCTIONS 3.0: For cancellations, check if ANY Admin column has negative value
+        c_negative_mask = df_copy[working_admin_cols].iloc[1:] < 0
+        c_has_negative = c_negative_mask.any(axis=1)
+        c_filtered = c_df[c_df.index.isin(df_copy[c_has_negative].index)]
         
         # Calculate how many zero-value NB records we need to include
         current_total = len(nb_positive) + len(r_filtered) + len(c_filtered)
@@ -462,10 +467,10 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         st.write(f"  R positive (sum > 0): {len(r_filtered)}")
         st.write(f"  C zero/negative (sum <= 0): {len(c_filtered)}")
         
-        st.write(f"📊 **CORRECT Karen 2.0 filtering results (FORCED):**")
+        st.write(f"📊 **INSTRUCTIONS 3.0 filtering results:**")
         st.write(f"  New Business (sum > 0): {len(nb_filtered)}")
         st.write(f"  Reinstatements (sum > 0): {len(r_filtered)}")
-        st.write(f"  Cancellations (sum < 0): {len(c_filtered)}")
+        st.write(f"  Cancellations (ANY Admin column negative): {len(c_filtered)}")
         st.write(f"  Total: {len(nb_filtered) + len(r_filtered) + len(c_filtered)}")
         
         # Check if we're in the expected range
@@ -754,58 +759,50 @@ def process_transaction_data_karen_2_0(df, ncb_columns, required_cols, approach)
         # But output Excel sheets with 7-column Karen 2.0 format as per instructions
         
         # Data Set 1: New Business (NB) - 17 columns in exact order (Karen 2.0)
+        # INSTRUCTIONS 3.0: Add Admin 6,7,8 after Admin 10 Amount
         nb_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
-            'PLACEHOLDER_AU', 'PLACEHOLDER_AW', 'PLACEHOLDER_AY',  # Admin 6, 7, 8 Amount
-            ncb_columns.get('BA'), ncb_columns.get('BC')
+            ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
+            df.columns[46], df.columns[48], df.columns[50]  # Admin 6,7,8 Amount (AU, AW, AY)
         ]
         
         # Data Set 2: Reinstatements (R) - 17 columns in exact order (Karen 2.0)
+        # INSTRUCTIONS 3.0: Add Admin 6,7,8 after Admin 10 Amount
         r_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
             required_cols.get('U'), ncb_columns.get('AO'), ncb_columns.get('AQ'),
-            'PLACEHOLDER_AU', 'PLACEHOLDER_AW', 'PLACEHOLDER_AY',  # Admin 6, 7, 8 Amount
-            ncb_columns.get('BA'), ncb_columns.get('BC')
+            ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
+            df.columns[46], df.columns[48], df.columns[50]  # Admin 6,7,8 Amount (AU, AW, AY)
         ]
         
         # Data Set 3: Cancellations (C) - 21 columns in exact order (Karen 2.0)
+        # INSTRUCTIONS 3.0: Add Admin 6,7,8 after Admin 10 Amount
         c_output_cols = [
             required_cols.get('B'), required_cols.get('C'), required_cols.get('D'),
             required_cols.get('E'), required_cols.get('F'), required_cols.get('H'),
-            required_cols.get('L'), required_cols.get('J'), required_cols.get('M'),
+            required_cols.get('L'), required_cols.get('J'), required_cols.get('J'),  # Transaction Type (column J)
             required_cols.get('U'), required_cols.get('Z'), required_cols.get('AA'),
             required_cols.get('AB'), required_cols.get('AE'), ncb_columns.get('AO'),
-            ncb_columns.get('AQ'), 'PLACEHOLDER_AU', 'PLACEHOLDER_AW', 'PLACEHOLDER_AY',  # Admin 6, 7, 8 Amount
-            ncb_columns.get('BA'), ncb_columns.get('BC')
+            ncb_columns.get('AQ'), ncb_columns.get('BA'), ncb_columns.get('BC'),  # Admin 10 Amount
+            df.columns[46], df.columns[48], df.columns[50]  # Admin 6,7,8 Amount (AU, AW, AY)
         ]
         
-        # Add placeholder columns to filtered dataframes for the missing Admin columns
-        def add_placeholder_columns(df):
-            """Add placeholder columns with 0 values for missing Admin 6, 7, 8 Amount columns."""
-            df_with_placeholders = df.copy()
-            df_with_placeholders['PLACEHOLDER_AU'] = 0  # Admin 6 Amount
-            df_with_placeholders['PLACEHOLDER_AW'] = 0  # Admin 7 Amount
-            df_with_placeholders['PLACEHOLDER_AY'] = 0  # Admin 8 Amount
-            return df_with_placeholders
+        # INSTRUCTIONS 3.0: Using real Admin 6,7,8 columns from the source data
+        # No need for placeholder columns since we're using actual data
+        st.write(f"✅ **INSTRUCTIONS 3.0: Using real Admin 6,7,8 columns from source data**")
+        st.write(f"  Admin 6: {df.columns[46]} (AU amount)")
+        st.write(f"  Admin 7: {df.columns[48]} (AW amount)")
+        st.write(f"  Admin 8: {df.columns[50]} (AY amount)")
         
-        # Add placeholder columns to filtered dataframes
-        nb_filtered_with_placeholders = add_placeholder_columns(nb_filtered)
-        r_filtered_with_placeholders = add_placeholder_columns(r_filtered)
-        c_filtered_with_placeholders = add_placeholder_columns(c_filtered)
-        
-        st.write(f"✅ **Added placeholder columns for Admin 6, 7, 8 Amount (AU, AW, AY)**")
-        st.write(f"  These columns contain 0 values as they don't exist in the source data")
-        st.write(f"  This allows us to output the exact 7-column format specified in Karen 2.0")
-        
-        # CRITICAL: Ensure we're using the dataframes WITH placeholders for output
-        nb_output_data = nb_filtered_with_placeholders
-        r_output_data = r_filtered_with_placeholders
-        c_output_data = c_filtered_with_placeholders
+        # Use the filtered dataframes directly
+        nb_output_data = nb_filtered
+        r_output_data = r_filtered
+        c_output_data = c_filtered
         
         # Debug: Show selected columns for each dataset
         st.write("🔍 **DEBUG: Selected columns for each dataset:**")
@@ -1484,7 +1481,7 @@ def continuous_testing_until_success(df, ncb_columns, required_cols, transaction
     }
 
 def main():
-    st.title("📊 Karen 2.0 NCB Data Processor")
+    st.title("📊 Karen 3.0 NCB Data Processor")
     
     # 🔒 SECRET DEBUG MODE - Hidden from UI but accessible
     # Add a hidden text input that can be used to activate debug mode
@@ -1516,7 +1513,7 @@ def main():
                 else:
                     st.write(f"  Round {test_round} failed, trying next approach...")
     
-    st.write("**Upload your Excel file to process NCB transaction data according to Karen 2.0 specifications.**")
+    st.write("**Upload your Excel file to process NCB transaction data according to Karen 3.0 specifications (Data tab only).**")
     
     # File uploader
     uploaded_file = st.file_uploader("Choose an Excel file", type=['xlsx', 'xls'])
@@ -1530,7 +1527,7 @@ def main():
                 st.success("✅ **File processed successfully!**")
                 
                 # Show results summary
-                st.subheader("📊 Processing Results - Karen 2.0")
+                st.subheader("📊 Processing Results - Karen 3.0")
                 
                 # Get the actual counts from the result
                 nb_count = len(result.get('nb_data', []))

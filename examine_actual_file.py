@@ -25,7 +25,7 @@ def examine_excel_structure():
             # Look for Admin columns by examining more rows
             print("\n🔍 **Looking for Admin columns in more rows...**")
             for row_idx in range(20):  # Check first 20 rows
-                row_data = df.iloc[row_idx, :50]  # Check first 50 columns
+                row_data = df.iloc[row_idx, :60]  # Check first 60 columns to see Admin 8,9,10
                 admin_count = 0
                 admin_positions = []
                 
