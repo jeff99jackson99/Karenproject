@@ -405,10 +405,34 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
         r_output_cols = [col for col in r_output_cols if col is not None and col in df.columns]
         c_output_cols = [col for col in c_output_cols if col is not None and col in df.columns]
         
-        # Create output dataframes and clean any remaining duplicate columns
+        # CRITICAL FIX: Ensure Admin columns contain the converted numeric data
+        # The filtered DataFrames need to use the converted Admin column data from df_copy
+        st.write("🔍 **Ensuring Admin columns contain converted numeric data in output...**")
+        
+        # Create output dataframes with proper Admin column data
         nb_output = nb_filtered[nb_output_cols].copy()
         r_output = r_filtered[r_output_cols].copy()
         c_output = c_filtered[c_output_cols].copy()
+        
+        # CRITICAL: Replace Admin columns with the converted numeric data from df_copy
+        for col in ['AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']:
+            if col in ncb_columns:
+                admin_col_name = ncb_columns[col]
+                if admin_col_name in df_copy.columns and admin_col_name in nb_output.columns:
+                    # Get the converted numeric data for the filtered rows
+                    filtered_indices = nb_filtered.index
+                    nb_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    st.write(f"  ✅ Updated {admin_col_name} in NB output with converted data")
+                
+                if admin_col_name in df_copy.columns and admin_col_name in r_output.columns:
+                    filtered_indices = r_filtered.index
+                    r_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    st.write(f"  ✅ Updated {admin_col_name} in R output with converted data")
+                
+                if admin_col_name in df_copy.columns and admin_col_name in c_output.columns:
+                    filtered_indices = c_filtered.index
+                    c_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    st.write(f"  ✅ Updated {admin_col_name} in C output with converted data")
         
         # Clean duplicate columns in output dataframes
         nb_output = clean_duplicate_columns(nb_output)
