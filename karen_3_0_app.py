@@ -475,23 +475,62 @@ def process_transaction_data_karen_3_0(df, ncb_columns, required_cols):
                 if admin_col_name in df_copy.columns and admin_col_name in nb_output.columns:
                     # Get the converted numeric data for the filtered rows
                     filtered_indices = nb_filtered.index
-                    nb_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    # CRITICAL FIX: Use .copy() to preserve data types and values exactly
+                    nb_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].copy()
                     st.write(f"  ✅ Updated {admin_col_name} in NB output with converted data")
+                    
+                    # Verify the data was copied correctly
+                    sample_copied = nb_output[admin_col_name].dropna().head(3).tolist()
+                    st.write(f"    Sample data after copying to NB: {sample_copied}")
                 
                 if admin_col_name in df_copy.columns and admin_col_name in r_output.columns:
                     filtered_indices = r_filtered.index
-                    r_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    # CRITICAL FIX: Use .copy() to preserve data types and values exactly
+                    r_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].copy()
                     st.write(f"  ✅ Updated {admin_col_name} in R output with converted data")
+                    
+                    # Verify the data was copied correctly
+                    sample_copied = r_output[admin_col_name].dropna().head(3).tolist()
+                    st.write(f"    Sample data after copying to R: {sample_copied}")
                 
                 if admin_col_name in df_copy.columns and admin_col_name in c_output.columns:
                     filtered_indices = c_filtered.index
-                    c_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].values
+                    # CRITICAL FIX: Use .copy() to preserve data types and values exactly
+                    c_output[admin_col_name] = df_copy.loc[filtered_indices, admin_col_name].copy()
                     st.write(f"  ✅ Updated {admin_col_name} in C output with converted data")
+                    
+                    # Verify the data was copied correctly
+                    sample_copied = c_output[admin_col_name].dropna().head(3).tolist()
+                    st.write(f"    Sample data after copying to C: {sample_copied}")
         
         # Clean duplicate columns in output dataframes
         nb_output = clean_duplicate_columns(nb_output)
         r_output = clean_duplicate_columns(r_output)
         c_output = clean_duplicate_columns(c_output)
+        
+        # FINAL VERIFICATION: Show actual Admin column data in output DataFrames
+        st.write("🔍 **FINAL VERIFICATION - Admin column data in output DataFrames:**")
+        for col in ['AO', 'AQ', 'AU', 'AW', 'AY', 'BA', 'BC']:
+            if col in ncb_columns:
+                admin_col_name = ncb_columns[col]
+                
+                # Check NB output
+                if admin_col_name in nb_output.columns:
+                    nb_sample = nb_output[admin_col_name].dropna().head(3).tolist()
+                    nb_negative = (nb_output[admin_col_name] < 0).sum()
+                    st.write(f"  {admin_col_name} in NB output: Sample={nb_sample}, Negatives={nb_negative}")
+                
+                # Check R output
+                if admin_col_name in r_output.columns:
+                    r_sample = r_output[admin_col_name].dropna().head(3).tolist()
+                    r_negative = (r_output[admin_col_name] < 0).sum()
+                    st.write(f"  {admin_col_name} in R output: Sample={r_sample}, Negatives={r_negative}")
+                
+                # Check C output
+                if admin_col_name in c_output.columns:
+                    c_sample = c_output[admin_col_name].dropna().head(3).tolist()
+                    c_negative = (c_output[admin_col_name] < 0).sum()
+                    st.write(f"  {admin_col_name} in C output: Sample={c_sample}, Negatives={c_negative}")
         
         st.write(f"✅ **Output dataframes created:**")
         st.write(f"  NB: {nb_output.shape}")
